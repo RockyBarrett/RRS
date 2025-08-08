@@ -1,0 +1,2064 @@
+/* ==== Header ==== */
+.header {
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 30px;
+  border-bottom: 1px solid #000000;
+}
+
+.header nav a {
+  color: #047857;
+  margin-left: 20px;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* ==== Header ==== */
+.header {
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 30px;
+  border-bottom: 1px solid #000000;
+}
+
+/* Optional: this wraps just the nav links */
+.navLinks {
+  display: flex;
+  gap: 20px;
+}
+
+.header nav a {
+  color: #047857;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* === Mobile: space-between for nav links === */
+@media (max-width: 640px) {
+  .navLinks {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .header {
+    padding: 10px 16px;
+  }
+}
+/* ==== Hero ==== */
+.hero {
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(135deg, #046e50, #10b981);
+  color: white;
+  padding: 100px 20px;
+  text-align: center;
+  overflow: hidden;
+  margin-bottom: 120px;
+}
+
+.heroBackground {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.bubble, .bubble2, .bubble3 {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  animation: float 10s ease-in-out infinite;
+}
+
+.bubble {
+  width: 120px;
+  height: 120px;
+  top: 10%;
+  left: 20%;
+}
+
+.bubble2 {
+  width: 80px;
+  height: 80px;
+  top: 40%;
+  right: 25%;
+  animation-delay: 2s;
+}
+
+.bubble3 {
+  width: 60px;
+  height: 60px;
+  bottom: 15%;
+  left: 35%;
+  animation-delay: 4s;
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+  100% { transform: translateY(0); }
+}
+
+/* ==== Hero text styles ==== */
+.mainTitle {
+  font-size: 5rem;
+  margin-bottom: 10px;
+}
+
+.subTitle {
+  font-size: 4rem;
+  color: #d1fae5;
+  margin-bottom: 20px;
+}
+
+.heroText {
+  font-size: 1.5rem;
+  max-width: 700px;
+  margin: auto;
+  margin-bottom: 30px;
+}
+
+.underline {
+  background-image: linear-gradient(to top, #fbbf24 30%, transparent 30%);
+  background-size: 100% 0.3em;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+}
+
+.heroHighlight {
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.bigDollar {
+  display: inline-block;
+  transform: scale(1.2);
+  vertical-align: 0.125em;
+  margin-right: 0.1em;
+}
+
+/* ==== Buttons ==== */
+.button, .buttonOutline {
+  display: inline-block;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  margin: 10px;
+}
+
+.button {
+  background: #fbbf24;
+  color: #111827;
+}
+
+.buttonOutline {
+  border: 2px solid #fbbf24;
+  color: #fbbf24;
+}
+
+/* ==== Section headings & text ==== */
+.section {
+  padding: 60px 20px;
+  max-width: 1300px;
+  margin: auto;
+  text-align: center;
+}
+
+.altSection { background: #f9fafb; }
+
+.headingBig {
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin-bottom: 24px;
+}
+
+.highlightGreen { color: #10b981; }
+
+.subheadingLarge {
+  font-size: 1.2rem;
+  color: #4b5563;
+  max-width: 48rem;
+  margin: 0 auto 2rem;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* ==== 📱 Mobile adjustments ==== */
+@media (max-width: 640px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 20px;
+  }
+
+  .header nav a {
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .hero {
+    padding: 60px 20px;
+    margin-bottom: 80px;
+  }
+
+  .mainTitle {
+    font-size: 2.8rem;
+  }
+
+  .subTitle {
+    font-size: 1.8rem;
+  }
+
+  .heroText {
+    font-size: 1rem;
+  }
+
+  .headingBig {
+    font-size: 2.2rem;
+  }
+
+  .subheadingLarge {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .section {
+    padding: 40px 15px;
+  }
+
+  .button, .buttonOutline {
+    width: 100%;
+    text-align: center;
+    margin: 8px 0;
+  }
+}
+
+/* Stats section container & layout */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 100px;
+  max-width: 1400px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.statIcon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: -2px;
+  border-radius: 1rem;
+  background: #f9fafb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.stat:hover .statIcon {
+  transform: scale(1.05);
+}
+
+/* Only target svg inside statIcon inside stats */
+.stats .statIcon svg {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Instead of forcing stroke in CSS, use color on the parent and let SVG use stroke="currentColor" */
+.green  { color: #059669; }   /* emerald-600 */
+.blue   { color: #2563eb; }   /* blue-600 */
+.purple { color: #7c3aed; }   /* purple-600 */
+.golden { color: #deb54c; } /* golden-600 */
+
+.statNumber {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 0px;
+}
+
+.statLabel {
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+
+/* Hero Buttons */
+.heroButton {
+  display: inline-block;
+  background: #fbbf24;
+  color: #111827;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  margin: 10px;
+}
+
+.buttonOutline {
+  display: inline-block;
+  border: 2px solid #fbbf24;
+  color: #fbbf24;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  margin: 10px;
+}
+
+/* Sections */
+.section {
+  padding: 60px 20px;
+  max-width: 1300px;
+  margin: auto;
+}
+
+.altSection {
+  background: #f9fafb;
+}
+
+.heading {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.subheading {
+  font-size: 1.1rem;
+  color: #4b5563;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Stats / Cards */
+.stats, .steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 100px;
+  margin-top: 20px;
+}
+
+.card, .step {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  width: 220px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  text-align: center;
+  font-weight: 600;
+  color: #047857;
+}
+
+
+.calculatorForm {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-width: 400px;
+  margin: auto;
+}
+
+.calculatorForm input {
+  padding: 10px;
+  border: 1px solid #8db0e6;
+  border-radius: 6px;
+}
+
+.calculatorResults {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resultBox {
+  background: white;
+  border-radius: 8px;
+  padding: 10px 15px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  display: flex;
+  justify-content: space-between;
+  font-weight: 500;
+  color: #047857;
+}
+
+.calculatorGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  justify-content: center;
+}
+@media (min-width: 1024px) {
+  .calculatorGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+
+.calculatorContent {
+  padding: 2rem;
+}
+
+.calculatorContent label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.calculatorContent input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #d1d5db;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.calculatorNote {
+  background: #ecfdf5;
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.calculatorNote h4 {
+  font-weight: 600;
+  color: #065f46;
+  margin-bottom: 0.5rem;
+}
+
+.calculatorNote ul {
+  color: #065f46;
+  font-size: 0.9rem;
+  list-style: none;
+  padding-left: 0;
+}
+
+.resultsColumn {
+  display: grid;
+  gap: 1rem;
+}
+
+.resultCard {
+  width: 90%;
+  min-width: 552px;
+  /* height: 220px; */        /* <-- remove this line entirely */
+  max-height: 220px;          /* <-- add this new line */
+  padding: 32px;
+  border-radius: 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(to bottom right, #f9fafb, #f3f4f6);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  margin: 0 auto;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.resultCard:hover {
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+  transform: translateY(-4px);
+}
+
+/* Colored variants override background & text colors */
+
+.resultCard.green {
+  background: linear-gradient(to bottom right, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+.resultCard.blue {
+  background: linear-gradient(to bottom right, #dbeafe, #bfdbfe);
+  color: #1e40af;
+}
+.resultCard.purple {
+  background: linear-gradient(to bottom right, #ede9fe, #ddd6fe);
+  color: #5b21b6;
+}
+
+.benefitIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.benefitIcon.green { background: #10b981; }
+.benefitIcon.blue { background: #3b82f6; }
+.benefitIcon.purple { background: #8b5cf6; }
+.amber { background: #f59e0b; }
+
+/* Inner heading & amount styling */
+.resultCard h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+.text-center {
+  text-align: center;
+}
+
+/* Common icon + title area */
+.iconAndTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+.combinedresultTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #7a08ec;  /* emerald-800 */
+}
+
+.resultSubtitle {
+  font-size: 0.9rem;
+  color: #047857;  /* emerald-700 */
+}
+
+/* Result rows */
+.resultRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.resultAmount {
+  font-weight: bold;
+  font-size: 1.5rem;
+  color: #065f46;  /* emerald-800 */
+}
+
+.resultLarge {
+  font-weight: bold;
+  font-size: 1.75rem;
+  color: #1e40af; /* blue-900 */
+}
+
+.resultXLarge {
+  font-weight: bold;
+  font-size: 2rem;
+  color: #5b21b6; /* purple-900 */
+}
+
+.resultNote {
+  margin-top: 0.25rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+
+/* Calculator Sizes & Colors */
+
+/* Main calculator card */
+.calculatorCard {
+  width: 552px;
+  height: 384px;
+  padding: 32px;
+  border-radius: 12px;
+  background: rgb(255, 253, 253); /* soft light green */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Calculator header inside main card */
+.calculatorHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(to right, #059669, #047857); /* emerald gradient */
+  color: white;
+  padding: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+/* Calculator content area */
+.calculatorContent {
+  flex: 1;
+  padding-top: 1rem;
+}
+
+/* Top side card: light green bg, dark green font */
+.resultCard.green {
+  background: linear-gradient(to bottom right, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+
+/* Middle side card: light blue bg, dark blue font */
+.resultCard.blue {
+  background: linear-gradient(to bottom right, #dbeafe, #bfdbfe);
+  color: #1e40af;
+}
+
+/* Bottom side card: light purple bg, dark purple font */
+.resultCard.purple {
+  background: linear-gradient(to bottom right, #ede9fe, #ddd6fe);
+  color: #5b21b6;
+}
+
+/* Keep titles styled inside cards */
+.resultCard h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+/* Amounts centered & big */
+.resultCard .text-2xl, 
+.resultCard .text-3xl, 
+.resultCard .text-4xl {
+  font-weight: bold;
+}
+
+@media (max-width: 640px) {
+  .calculatorGrid {
+    grid-template-columns: 1fr;         /* stack vertically */
+    gap: 1.5rem;
+    justify-content: center;
+  }
+
+  .calculatorCard {
+    width: 100%;                        /* full width of container */
+    height: auto;                       /* remove fixed height to let content grow */
+    padding: 1.5rem;
+  }
+
+  .calculatorHeader {
+    font-size: 1rem;
+    padding: 0.75rem;
+  }
+
+  .calculatorContent {
+    padding-top: 0.5rem;
+  }
+
+  .resultCard {
+    width: 100%;                        /* full width on mobile */
+    min-width: auto;                    /* remove min-width */
+    max-height: none;                   /* remove height cap so content fits */
+    padding: 1.5rem;
+  }
+
+  .resultCard h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .resultAmount {
+    font-size: 1.25rem;
+  }
+
+  .resultLarge {
+    font-size: 1.5rem;
+  }
+
+  .resultXLarge {
+    font-size: 1.75rem;
+  }
+
+  .resultNote {
+    font-size: 0.85rem;
+  }
+
+  .benefitIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .iconAndTitle {
+    gap: 0.5rem;
+  }
+
+  .resultSubtitle {
+    font-size: 0.8rem;
+  }
+
+  .resultRow {
+    flex-direction: column;             /* stack label and amount vertically */
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .text-center {
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .calculatorCard {
+    box-sizing: border-box; /* count padding inside width */
+    width: 100%;
+    padding: 1rem;          /* reduce padding: 16px left+right */
+  }
+
+  .calculatorHeader {
+    font-size: 1rem;
+    padding: 0.5rem;
+  }
+
+  .calculatorContent {
+    padding-top: 0.5rem;
+  }
+
+  .resultCard {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 1rem;           /* reduce side padding */
+  }
+}
+
+/* Benefit cards layout & effect */
+.benefitsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  width: 100%;             /* allow it to shrink on mobile */
+  max-width: 1300px;       /* cap it at 1300px on large screens */
+  margin: 0 auto;          /* center horizontally */
+  justify-items: center;   /* center items inside each cell */
+  padding: 0 1rem;         /* side padding on small screens */
+}
+
+@media (min-width: 1024px) {
+  .benefitsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+.benefitCard {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;                    /* less padding than 3rem */
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 300;                 /* remove height cap to allow taller cards */
+}
+
+.benefitCard:hover {
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+  transform: translateY(-4px);
+}
+
+.benefitTag {
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  border-radius: 9999px;
+  padding: 0.125rem 0.625rem;
+}
+
+.benefitContent {
+  gap: 1rem;
+  padding: 0rem;
+}
+
+@media (max-width: 640px) {
+  .benefitsGrid {
+    grid-template-columns: 1fr;      /* stack cards */
+    gap: 1.5rem;                     /* slightly smaller gap */
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .benefitCard {
+    width: 100%;
+    max-width: 100%;
+    padding: 1.25rem;               /* reduced padding for small screen */
+    box-sizing: border-box;
+  }
+
+  .benefitTag {
+    font-size: 0.875rem;
+    padding: 0.125rem 0.5rem;
+  }
+
+  .benefitContent {
+    gap: 0.75rem;
+  }
+}
+
+/* Base pill style */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  margin: 0 auto 16px;
+  text-align: center;
+  border: 1px solid transparent; /* overridden below */
+}
+
+/* Light purple pill */
+.purplePill {
+  background: #ede9fe;       /* purple-100 */
+  color: #6b21a8;            /* purple-800 */
+  border-color: #ddd6fe;     /* purple-200 */
+}
+
+/* Light blue pill */
+.bluePill {
+  background: #dbeafe;       /* blue-100 */
+  color: #1e3a8a;            /* blue-800 */
+  border-color: #bfdbfe;     /* blue-200 */
+}
+
+/* Light gold/yellow pill */
+.amberPill {
+  background: #fef3c7;       /* amber-100 */
+  color: #92400e;            /* amber-800 */
+  border-color: #fde68a;     /* amber-200 */
+}
+
+/* Light green pill */
+.greenPill {
+  background: #d1fae5;       /* emerald-100 */
+  color: #065f46;            /* emerald-800 */
+  border-color: #a7f3d0;     /* emerald-200 */
+}
+
+.subheadingLarge {
+  font-size: 1.2rem;
+  color: #4b5563;
+  max-width: 48rem;  /* same as max-w-3xl */
+  margin: 0 auto 2rem;
+}
+
+/* HOW IT WORKS SECTION */
+.howCard {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  margin: 40px auto;
+  max-width: 1000px;
+  max-height: 300px;
+}
+
+.howHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  padding: 1.5rem;
+}
+
+.howHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.howIconBox {
+  width: 64px;
+  height: 64px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.howStepNumber {
+  font-size: 0.875rem;
+  font-weight: 500;
+  opacity: 0.9;
+  margin-bottom: 0.25rem;
+}
+
+.howStepTitle {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.howBigStep {
+  font-size: 3.5rem;
+  font-weight: bold;
+  opacity: 0.2;
+  display: none;
+}
+@media (min-width: 640px) {
+  .howBigStep { display: block; }
+}
+
+.howBody {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  background: white;
+  padding: 0.5rem;
+}
+@media (min-width: 640px) {
+  .howBody {
+    grid-template-columns: repeat(2,1fr);
+    align-items: center;
+  }
+}
+
+.howTextBox p {
+  font-size: 1rem;
+  color: #374151;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.howTag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  margin-bottom: 1rem;
+}
+
+.howImageBox {
+  text-align: center;
+}
+.howImageBox p {
+  color: #6b7280;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+
+.howGrayIcon {
+  color: #9ca3af;
+}
+
+.howGreen { background: #059669; }
+.howBlue  { background: #2563eb; }
+.howPurple{ background: #7c3aed; }
+
+.roiHeader {
+  text-align: center;
+  margin-bottom: 2rem;  /* adjust as needed */
+}
+
+.roiPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  margin-bottom: 1rem;
+  color: #6b21a8;           /* purple-800 */
+  background: #ede9fe;      /* purple-100 */
+  border: 1px solid #ddd6fe;/* purple-200 */
+}
+
+.roiTitle {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #1f2937;           /* gray-800 */
+  margin-bottom: 0.75rem;
+}
+
+.roiSubtext {
+  font-size: 1.25rem;
+  color: #4b5563;           /* gray-600 */
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.credGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+@media (min-width: 768px) {
+  .credGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.credCard {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.credCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+}
+
+.credIconBox {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  background: #d1fae5;  /* emerald-100 */
+  color: #059669;       /* emerald-600 */
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.credTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.credText {
+  font-size: 0.95rem;
+  color: #4b5563;
+}
+
+.credLogo {
+  margin-top: 1rem;
+  max-height: 40px;
+  width: auto;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0.9;
+  transition: opacity 0.3s ease;
+}
+.credLogo:hover {
+  opacity: 1;
+}
+
+.credibilityGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+@media (min-width: 768px) {
+  .credibilityGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.credibilityCard {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.credibilityCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+}
+
+.credibilityIcon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  background: #d1fae5; /* light emerald */
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #059669; /* emerald-600 */
+}
+
+.credibilityCard h3 {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.credibilityCard p {
+  color: #4b5563;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.credibilityLogo {
+  max-width: 120px;
+  margin: 0 auto;
+  display: block;
+}
+
+.credibilityGrid {
+  display: grid;
+  gap: 2rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+}
+@media (min-width: 768px) {
+  .credibilityGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.credibilityCard {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+.credibilityCard:hover {
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+  transform: translateY(-4px);
+}
+.credibilityIconBox {
+  width: 64px;
+  height: 64px;
+  background: #d1fae5; /* light emerald */
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+}
+
+
+.quoteBox {
+  background: linear-gradient(to right, #059669, #047857);
+  color: white;
+  border-radius: 12px;
+  padding: 3rem;
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.quoteBox blockquote {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.quoteHighlight {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.quoteTags {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  align-items: center;
+  font-size: 1rem;
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+  .credibilityGrid {
+    grid-template-columns: 1fr;        /* single column on small screens */
+    gap: 1.5rem;                        /* slightly smaller gap */
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .credibilityCard {
+    padding: 1.5rem;                    /* reduce padding */
+  }
+
+  .credibilityIconBox {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+  }
+
+  .credibilityCard h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .credibilityCard p {
+    font-size: 0.9rem;
+  }
+
+  .quoteBox {
+    padding: 2rem;
+  }
+
+  .quoteBox blockquote {
+    font-size: 1.1rem;
+  }
+
+  .quoteHighlight {
+    font-size: 1.3rem;
+  }
+
+  .quoteTags {
+    flex-wrap: wrap;                    /* let tags break onto next line */
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ==== Section layout ==== */
+.contactSection {
+  padding: 5rem 1rem;
+  background-color: #111827; /* bg-gray-900 */
+  color: #fff;
+}
+
+.contactContainer {
+  max-width: 80rem;
+  margin: 0 auto;
+  display: grid;
+  gap: 3rem;
+}
+
+@media (min-width: 1024px) {
+  .contactContainer {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ==== Top header ==== */
+/* ==== 📞 Contact Header Section ==== */
+
+/* Header container: spans full grid, centers content, adds safe horizontal padding on small screens */
+.contactHeader {
+  grid-column: 1 / -1;
+  text-align: center;
+  box-sizing: border-box;                /* ensures content doesn't touch screen edges */
+}
+
+/* Small badge above the title */
+.contactBadge {
+  display: inline-flex;
+  align-items: center;
+  background-color: #d1fae5;      /* light emerald */
+  color: #065f46;                 /* dark emerald text */
+  border: 1px solid #a7f3d0;      /* emerald border */
+  border-radius: 9999px;          /* fully rounded pill */
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  box-sizing: border-box;
+}
+
+/* Main contact title */
+.contactTitle {
+  font-size: 2.25rem;            /* large by default */
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  max-width: 90vw;               /* prevent overflow on small screens */
+  word-wrap: break-word;         /* force wrapping if text is too long */
+}
+
+/* Larger title on tablets and above */
+@media (min-width: 768px) {
+  .contactTitle {
+    font-size: 3rem;
+  }
+}
+
+/* Subtitle text below title */
+.acSubtitle {
+  font-size: 1.25rem;
+  color: #d1d5db;                /* light gray text */
+  max-width: 48rem;              /* don't get too wide on large screens */
+  margin: 0 auto 3rem;           /* center and add space below */
+}
+
+/* Highlighted words inside header (keeps brand color) */
+.highlight {
+  color: #34d399;                /* emerald-400 */
+}
+
+/* ==== 📱 Mobile tweaks ==== */
+@media (max-width: 640px) {
+  .contactHeader {
+    text-align: center;          /* center text on small screens */
+    box-sizing: border-box;             /* reduce padding */
+  }
+
+  .contactTitle {
+    font-size: 1.75rem;          /* slightly smaller title */
+  }
+
+  .acSubtitle {
+    font-size: 1rem;             /* slightly smaller subtitle */
+    box-sizing: border-box;        /* tighter spacing */
+  }
+
+  .contactBadge {
+    font-size: 0.7rem;           /* smaller badge text */
+    padding: 0.4rem 0.8rem;      /* slightly smaller badge */
+    margin-bottom: 1rem;         /* tighter spacing below badge */
+  }
+}
+
+/* ==== Form container ==== */
+.formContainer {   
+  height: 376px;               /* fixed height */
+  padding: 32px;               /* p-8 */
+  background-color: #ffffff;   /* bg-white */
+  color: #1f2937;              /* text-gray-900 */
+  border-radius: 0.5rem;       /* rounded-lg (8px) */
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* shadow-2xl */
+  display: flex;
+  flex-direction: column;
+  justify-content: center
+}
+
+.title {
+  font-size: 1.5rem;     /* text-2xl */
+  font-weight: 700;      /* font-bold */
+  margin-bottom: 1.5rem; /* mb-6 */
+}
+
+.gridTwoCols {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* md:grid-cols-2 */
+  gap: 1rem;                             /* gap-4 */
+  margin-bottom: 1.5rem;                 /* space below grid */
+}
+
+.input,
+.textarea {
+  width: 100%;
+  height: 2.5rem;              /* h-10 */
+  padding: 0.5rem 0.rem;     /* px-3 py-2 */
+  font-size: 1rem;             /* text-base */
+  border: 2px solid #e5e7eb;   /* border-gray-200 */
+  border-radius: 0.375rem;     /* rounded-md */
+  background-color: #f9fafb;   /* bg-background */
+  color: #374151;              /* text-gray-700 */
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input:focus,
+.textarea:focus {
+  border-color: #10b981;       /* focus:border-emerald-500 */
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(16,185,129,0.4); /* emerald ring */
+}
+
+.textarea {
+  min-height: 5rem;            /* fits better in 376px card */
+  resize: vertical;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  height: 2.5rem;              /* h-10 */
+  padding: 0.75rem 1rem;       /* py-4 px-4 approx */
+  background-color: #059669;   /* bg-emerald-600 */
+  color: #ffffff;
+  font-size: 1.125rem;         /* text-lg */
+  font-weight: 600;            /* font-semibold */
+  border-radius: 0.375rem;     /* rounded-md */
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.button:hover {
+  background-color: #047857;   /* hover:bg-emerald-700 */
+}
+
+.icon {
+  width: 1.25rem;              /* w-5 */
+  height: 1.25rem;             /* h-5 */
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (max-width: 640px) {
+  .formContainer {
+    padding: 1rem;          /* reduce left+right padding from 32px to 16px */
+    height: auto;           /* let it grow naturally */
+  }
+
+  .gridTwoCols {
+    grid-template-columns: 1fr;   /* stack vertically */
+  }
+
+  .input,
+  .textarea {
+    width: 100%;
+    box-sizing: border-box;       /* critical: makes padding counted inside width */
+  }
+
+  .title {
+    font-size: 1.25rem;    /* slightly smaller title */
+    margin-bottom: 1rem;
+  }
+
+  .button {
+    display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem; /* space between icon and text */
+  box-sizing: border-box;
+  height: 3.25rem; /* h-12 */
+  font-size: 1.2rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+}
+
+  .input, .textarea {
+    font-size: 0.95rem;
+  }
+}
+
+/* ==== Contact card shared ==== */
+.contactCard {                         /* fixed width to match Schedule card */
+  padding: 32px;                         /* p-8 */
+  background-color: #065f46;             /* bg-emerald-800 */
+  border-radius: 0.5rem;                 /* rounded-lg */
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); /* shadow-2xl */
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.contactCardTitle {
+  font-size: 1.5rem;     /* text-2xl */
+  font-weight: 700;     /* font-bold */
+  margin-bottom: 1.5rem; /* mb-6 */
+}
+
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;          /* space-y-6 */
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;            /* space-x-4 */
+}
+
+.infoIconBox {
+  width: 3rem;          /* w-12 */
+  height: 3rem;         /* h-12 */
+  background-color: #047857; /* bg-emerald-700 */
+  border-radius: 0.75rem;    /* rounded-xl */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.infoIconBox svg {
+  stroke: currentColor;
+  color: white;      /* force currentColor to be white */
+}
+
+.infoLabel {
+  color: #a7f3d0;       /* text-emerald-100 */
+  font-size: 0.875rem;  /* text-sm */
+  margin: 0;
+}
+
+.infoValue {
+  color: white;
+  font-weight: 600;
+  font-size: 1.125rem;  /* text-lg */
+  margin: 0;
+}
+
+.expectCard {
+  padding: 1rem;                         /* p-8 */
+  background-color: rgba(255, 255, 255, 0.05); /* bg-white/10 */
+  backdrop-filter: blur(4px);            /* backdrop-blur-sm */
+  border: 1px solid #374151;             /* border-gray-700 */
+  border-radius: 0.5rem;                 /* rounded-lg */
+  box-shadow: 0 10px 15px rgba(0,0,0,0.3); /* shadow-2xl */
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.expectTitle {
+  font-size: 1.25rem;        /* text-xl */
+  font-weight: 700;          /* font-bold */
+  margin-bottom: 1rem;      /* mb-4 */
+}
+
+.expectList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;                 /* space-y-4 */
+}
+
+.expectItem {
+  display: flex;
+  gap: 0.75rem;              /* space-x-3 */
+}
+
+.expectItem svg {
+  width: 1.25rem;            /* w-5 */
+  height: 1.25rem;           /* h-5 */
+  color: #34d399;           /* text-emerald-400 */
+  flex-shrink: 0;
+  margin-top: 0.125rem;     /* mt-0.5 */
+}
+
+.expectText {
+  color: #d1d5db;           /* text-gray-300 */
+  font-size: 1rem;
+  margin: 0;
+}
+
+.cardsGrid {
+  display: grid;
+  gap: 3rem;                /* gap-12 */
+}
+
+@media (min-width: 1024px) { /* lg:grid-cols-2 */
+  .cardsGrid {
+    grid-template-columns: 2fr 1fr;
+    align-items: flex-start;
+  }
+}
+
+.sideCards {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;                /* space-y-8 */
+}
+
+/* Contact card (green) */
+.contactCard {
+  background-color: #065f46;  /* bg-emerald-800 */
+  border: 1px solid #047857;  /* border-emerald-700 */
+  color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px rgba(0,0,0,0.3);
+  padding: 2rem;
+}
+
+/* What to expect card (frosted) */
+.expectCard {
+  background-color: rgba(70, 69, 69, 0.676);  /* bg-white/10 */
+  border: 1px solid #374151;                   /* border-gray-700 */
+  backdrop-filter: blur(4px);                   /* backdrop-blur-sm */
+  color: rgb(75, 75, 75);
+  border-radius: 0.5rem;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Titles & text inside cards */
+.title {
+  font-size: 1.5rem;        /* text-2xl */
+  font-weight: bold;
+  margin-bottom: 1.5rem;    /* mb-6 */
+  color: #1f2937;           /* text-gray-900 */
+}
+
+.contactCardTitle {
+  font-size: 1.5rem;        /* text-2xl */
+  font-weight: bold;
+  margin-bottom: 1.5rem;
+  color: white;
+}
+
+.expectTitle {
+  font-size: 1.25rem;       /* text-xl */
+  font-weight: bold;
+  margin-bottom: 1rem;      /* mb-4 */
+  color: white;
+}
+
+/* Info list in contact card */
+.infoList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;              /* space-y-6 */
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;                /* space-x-4 */
+}
+
+.infoIconBox {
+  width: 3rem;                /* w-12 */
+  height: 3rem;               /* h-12 */
+  background-color: #047857;  /* bg-emerald-700 */
+  border-radius: 0.75rem;     /* rounded-xl */
+  display: flex;
+  align-items: center;
+  justify-content: center;    /* ensures centering horizontally */
+  flex-shrink: 0;             /* prevents it from shrinking */
+  padding: 0;                 /* remove any padding if added */
+}
+
+.infoLabel {
+  color: #a7f3d0;           /* text-emerald-100 */
+  font-size: 0.875rem;      /* text-sm */
+  margin: 0;
+}
+
+.infoValue {
+  color: white;
+  font-weight: 600;
+  font-size: 1.125rem;      /* text-lg */
+  margin: 0;
+}
+
+/* Expect list */
+.expectList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;                /* space-y-4 */
+}
+
+.expectItem {
+  display: flex;
+  gap: 0.75rem;             /* space-x-3 */
+}
+
+.expectText {
+  color: #ccd2d2;           /* text-gray-300 */
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.icon {
+  width: 1.5rem;             /* w-5 */
+  height: 1.5rem;            /* h-5 */
+  color: white;
+  flex-shrink: 0;
+}
+
+
+/* ==== Contact grid container ==== */
+.contactGrid {
+  display: grid;
+  gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;               /* side padding on small screens */
+}
+
+/* Desktop / large screens */
+@media (min-width: 1024px) {
+  .contactGrid {
+    grid-template-columns: auto auto;  /* two columns: form + side cards */
+    justify-content: center;           /* center the grid horizontally */
+    gap: 2rem;
+  }
+
+  .formContainer,
+  .expectCard,
+  .contactCard {
+    width: 520px;                      /* fixed width on desktop */
+  }
+}
+
+/* Side column container */
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Bottom section styling */
+.bottomSection {
+  background-color: #0f172a;
+  padding: 60px 20px;
+  color: white;
+}
+
+@media (min-width: 641px) {
+  .bottomSection {
+    width: 100%;
+  }
+}
+.contact-section .contact-title,
+.contact-section .contact-subtitle,
+.contact-section .contact-badge {
+  color: white;
+}
+
+.contact-section .highlight {
+  color: #10b981;
+}
+
+/* ==== Mobile screens ==== */
+@media (max-width: 640px) {
+  .formContainer,
+  .expectCard,
+  .contactCard {
+    box-sizing: border-box;   
+    width: 100%;               /* full width on small screens */
+  }
+
+  .contactGrid {
+    grid-template-columns: 1fr;   /* stack vertically */
+    padding: 0%;
+    max-width: 100%; 
+    width: 100%; 
+  }
+
+  .contactCardTitle,
+  .expectTitle,
+  .title {
+    font-size: 1.2rem;           /* smaller headings */
+  }
+
+  .infoValue {
+    font-size: 1rem;
+  }
+
+  .expectText {
+    font-size: 0.9rem;
+  }
+
+  .icon,
+  .expectItem svg,
+  .infoIconBox {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .sideColumn {
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .bottomSection {
+    position: static;
+    left: auto;
+    right: auto;
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+}
+
+.innerContent {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  box-sizing: border-box;
+}
+
+/* app/page.module.css */
+
+.whyChooseSection {
+  background: #f9fafb;
+  padding: 3rem 1rem;
+  border-radius: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.whyChooseTitle {
+  text-align: center;
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin-bottom: 5rem;
+}
+
+.whyChooseGrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;    /* optional: center the whole row */
+  gap: 2.5rem;                /* control spacing between items */
+}
+
+.whyChooseItem {
+  text-align: center;
+}
+
+.whyChooseIconBox {
+  width: 4rem;
+  height: 4rem;
+  background-color: #d1fae5;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem auto;
+}
+
+.whyChooseIcon {
+  width: 2rem;
+  height: 2rem;
+  color: #059669;
+}
+
+.whyChooseText {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 1rem;
+}
+
+
+/* ==== Hero text styles ==== */
+.mainTitle {
+  font-size: 5rem;
+  margin-bottom: 10px;
+}
+
+.subTitle {
+  font-size: 4rem;
+  color: #d1fae5;
+  margin-bottom: 20px;
+}
+
+.heroText {
+  font-size: 1.5rem;
+  max-width: 700px;
+  margin: auto;
+  margin-bottom: 30px;
+}
+
+.underline {
+  background-image: linear-gradient(to top, #fbbf24 30%, transparent 30%);
+  background-size: 100% 0.3em;
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+}
+
+.heroHighlight {
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.bigDollar {
+  display: inline-block;
+  transform: scale(1.2);
+  vertical-align: 0.125em;
+  margin-right: 0.1em;
+}
+
+  .nowrap {
+  white-space: nowrap;
+}
+
+/* ==== Buttons ==== */
+.button, .buttonOutline {
+  display: inline-block;
+  padding: 12px 24px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  margin: 10px;
+  box-sizing: border-box; /* <-- add this */
+}
+
+.heroButton {
+  background: #fbbf24;
+  color: #111827;
+}
+
+.buttonOutline {
+  border: 2px solid #fbbf24;
+  color: #fbbf24;
+}
+
+/* ==== Section headings & text ==== */
+.section {
+  padding: 60px 20px;
+  max-width: 1300px;
+  margin: auto;
+  text-align: center;
+}
+
+.altSection { background: #f9fafb; }
+
+.headingBig {
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin-bottom: 24px;
+}
+
+.highlightGreen { color: #10b981; }
+
+.subheadingLarge {
+  font-size: 1.2rem;
+  color: #4b5563;
+  max-width: 48rem;
+  margin: 0 auto 2rem;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  font-size: 0.9rem;
+  color: #4b5563;
+}
+
+/* ==== 📱 Mobile adjustments ==== */
+@media (max-width: 640px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 20px;
+  }
+
+  .header nav a {
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .hero {
+    padding: 60px 20px;
+    margin-bottom: 80px;
+  }
+
+  .mainTitle {
+    font-size: 2.8rem;
+  }
+
+  .subTitle {
+    font-size: 1.8rem;
+  }
+
+  .heroText {
+    font-size: 1rem;
+  }
+
+  .headingBig {
+    font-size: 2.2rem;
+  }
+
+  .subheadingLarge {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .section {
+    padding: 40px 15px;
+  }
+
+  .button, .buttonOutline {
+    width: 100%;
+    text-align: center;
+    margin: 8px 0;
+  }
+}
+
+.bottomSection {
+  background: #0f172a; /* dark blue/gray */
+  color: white;
+  width: 100%;
+  padding: 4rem 1rem; /* some breathing room on edges */
+}
+
+@media (max-width: 640px) {
+  .bottomSection,
+  .getStartedTodaySection {
+    box-sizing: border-box;
+  }
+
+  .contactGrid {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  .contactCard,
+  .formContainer,
+  .sideCards{
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  }
+
+  @media (max-width: 640px) {
+  .contactGrid {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .formContainer,
+  .contactCard,
+  .expectCard {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .gridTwoCols {
+    display: block;
+  }
+
+  .input {
+    width: 100%;
+    margin-bottom: 1rem;
+  }
+
+  .textarea {
+    width: 100%;
+  }
+}
+
+.footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  color: #ffffff;
+  background-color: #0f172a;
+  border-top: 1px solid #0f172a;
+}
