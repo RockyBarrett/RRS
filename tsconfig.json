@@ -29,6 +29,7 @@
   "include": [
     "app/**/*",
     "components/**/*",
+     "global.d.ts",
     ".next/types/**/*.ts"
     // paths where your TSX/TS files live
   ],
