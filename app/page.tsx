@@ -537,17 +537,39 @@ export default function Home() {
               rows={4}
               className={styles.textarea}
             />
-            <button type="button" className={styles.button}
-  onClick={() => window.open("https://calendly.com/lee-kw0k")}
+            <button
+  type="button"
+  className={styles.button}
+  onClick={() => {
+    const nameInput = document.querySelector('input[name="name"]') as HTMLInputElement;
+    const emailInput = document.querySelector('input[name="email"]') as HTMLInputElement;
+    const companyInput = document.querySelector('input[name="company"]') as HTMLInputElement;
+    const employeesInput = document.querySelector('input[name="employees"]') as HTMLInputElement;
+    const messageInput = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+
+    if (nameInput && emailInput && companyInput && employeesInput && messageInput) {
+      const name = encodeURIComponent(nameInput.value);
+      const email = encodeURIComponent(emailInput.value);
+      const company = encodeURIComponent(companyInput.value);
+      const employees = encodeURIComponent(employeesInput.value);
+      const message = encodeURIComponent(messageInput.value);
+
+      const a1 = encodeURIComponent(`Company: ${company}\nEmployees: ${employees}\nMessage: ${message}`);
+
+      const calendlyUrl = `https://calendly.com/lee-kw0k?full_name=${name}&email=${email}&a1=${a1}`;
+
+      window.open(calendlyUrl);
+    }
+  }}
 >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 22" fill="none" className={styles.icon}>
-                <path d="M8 2v4"></path>
-                <path d="M16 2v4"></path>
-                <rect width="18" height="18" x="3" y="4" rx="2"></rect>
-                <path d="M3 10h18"></path>
-              </svg>
-                Check Availabilty
-            </button>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 22" fill="none" className={styles.icon}>
+    <path d="M8 2v4"></path>
+    <path d="M16 2v4"></path>
+    <rect width="18" height="18" x="3" y="4" rx="2"></rect>
+    <path d="M3 10h18"></path>
+  </svg>
+  Check Availability
+</button>
           </form>
         </div>
 
