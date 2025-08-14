@@ -866,7 +866,6 @@
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
   margin: 40px auto;
   max-width: 1000px;
-  max-height: 300px;
 }
 
 .howHeader {
@@ -2061,4 +2060,9 @@
   color: #ffffff;
   background-color: #0f172a;
   border-top: 1px solid #0f172a;
+}
+
+.heroButtonsContainer {
+  position: relative; /* allows z-index to work */
+  z-index: 10;        /* higher than the bubbles/background */
 }

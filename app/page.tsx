@@ -49,11 +49,32 @@ export default function Home() {
           while saving your company up to <span className={styles.heroHighlight}>$600 per employee per year</span> in FICA taxes —
           plus offer comprehensive preventative care at zero direct cost.
         </p>
-        <div>
-          <a href="#contact" className={styles.heroButton}>Schedule Your Consultation</a>
-          <a href="#how" className={styles.buttonOutline}>Learn How It Works</a>
-        </div>
-      </section>
+<div className={styles.heroButtonsContainer}>
+  <a
+    href="#contact"
+    className={styles.heroButton}
+    onClick={(e) => {
+      e.preventDefault();
+      const section = document.getElementById('contact');
+      if (section) section.scrollIntoView({ behavior: 'smooth' });
+    }}
+  >
+    Schedule Your Consultation
+  </a>
+
+  <a
+    href="#how"
+    className={styles.buttonOutline}
+    onClick={(e) => {
+      e.preventDefault();
+      const section = document.getElementById('how');
+      if (section) section.scrollIntoView({ behavior: 'smooth' });
+    }}
+  >
+    Learn How It Works
+  </a>
+</div>
+</section>
 
       {/* Stats Section */}
 <section className={styles.stats}>
@@ -404,7 +425,7 @@ export default function Home() {
   <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
   <polyline points="16 7 22 7 22 13" />
 </svg>
-        <p>FICA Tax Savings</p>
+        <p>Employer Savings</p>
       </div>
     </div>
   </div>
@@ -547,19 +568,22 @@ export default function Home() {
     const employeesInput = document.querySelector('input[name="employees"]') as HTMLInputElement;
     const messageInput = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
 
-    if (nameInput && emailInput && companyInput && employeesInput && messageInput) {
-      const name = encodeURIComponent(nameInput.value);
-      const email = encodeURIComponent(emailInput.value);
-      const company = encodeURIComponent(companyInput.value);
-      const employees = encodeURIComponent(employeesInput.value);
-      const message = encodeURIComponent(messageInput.value);
-
-      const a1 = encodeURIComponent(`Company: ${company}\nEmployees: ${employees}\nMessage: ${message}`);
-
-      const calendlyUrl = `https://calendly.com/lee-kw0k?full_name=${name}&email=${email}&a1=${a1}`;
-
-      window.open(calendlyUrl);
+    if (!nameInput.value || !emailInput.value || !companyInput.value || !employeesInput.value || !messageInput.value) {
+      alert("Please fill in all fields before scheduling.");
+      return;
     }
+
+    const name = encodeURIComponent(nameInput.value);
+    const email = encodeURIComponent(emailInput.value);
+    const company = encodeURIComponent(companyInput.value);
+    const employees = encodeURIComponent(employeesInput.value);
+    const message = messageInput.value; // keep raw for now
+
+    const a1 = `Company: ${company}\nEmployees: ${employees}\nMessage: ${message}`;
+
+    const calendlyUrl = `https://calendly.com/lee-kw0k/payroll-strategy-meeting?full_name=${name}&email=${email}&a1=${encodeURIComponent(a1).replace(/%20/g, ' ')}`;
+
+    window.open(calendlyUrl);
   }}
 >
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 22" fill="none" className={styles.icon}>
