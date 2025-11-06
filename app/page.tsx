@@ -532,7 +532,7 @@ export default function Home() {
       <div className={styles.contactHeader}>
         <div className={`${styles.pill} ${styles.greenPill}`}>💬 Get Started Today</div>
         <h2 className={styles.contactTitle}>
-          Learn More About This <span className={styles.highlightGreen}>Payroll Strategy...</span>
+          Learn More About This <span className={styles.highlightGreen}>Tax Saving Strategy...</span>
         </h2>
         <p className="contact-subtitle">
           Schedule your personal consultation with one of our Experts. No pressure, no pitch – just information and a huge win for your team.
