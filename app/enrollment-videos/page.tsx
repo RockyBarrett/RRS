@@ -1,33 +1,49 @@
+'use client';
+
+import Image from 'next/image';
+import styles from './page.module.css';
+
 export default function EnrollmentVideosPage() {
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center py-16 px-6">
-      <h1 className="text-4xl font-bold mb-12 text-center">
-        Enrollment Overview Videos
-      </h1>
+    <div className={styles.pageWrapper}>
 
-      <div className="w-full max-w-3xl space-y-16">
+      {/* Background bubbles */}
+      <div className={styles.bgBubble}></div>
+      <div className={styles.bgBubble2}></div>
+      <div className={styles.bgBubble3}></div>
 
-        {/* Video 1 */}
-        <div className="w-full">
-          <h2 className="text-2xl font-semibold mb-4">English Overview</h2>
-          <video
-            controls
-            className="w-full rounded-xl shadow-lg"
-          >
+      <div className={styles.contentBox}>
+
+        {/* Logo */}
+        <div className={styles.logoWrapper}>
+          <Image 
+            src="/8930_1663277124.png" 
+            alt="RRS Logo" 
+            width={200}
+            height={200}
+            className={styles.logo}
+            priority
+          />
+        </div>
+
+        <h1 className={styles.pageTitle}>Enrollment Overview Videos</h1>
+        <p className={styles.pageSubtitle}>
+          A simple walkthrough of the SIMRP enrollment process in English and Spanish.
+        </p>
+
+        {/* English Video */}
+        <div className={styles.videoCard}>
+          <h2 className={styles.videoTitle}>English Overview</h2>
+          <video controls className={styles.videoPlayer}>
             <source src="/videos/simrp_video_493 (1).mp4" type="video/mp4" />
-            Your browser does not support the video tag.
           </video>
         </div>
 
-        {/* Video 2 */}
-        <div className="w-full">
-          <h2 className="text-2xl font-semibold mb-4">Spanish Overview</h2>
-          <video
-            controls
-            className="w-full rounded-xl shadow-lg"
-          >
+        {/* Spanish Video */}
+        <div className={styles.videoCard}>
+          <h2 className={styles.videoTitle}>Spanish Overview</h2>
+          <video controls className={styles.videoPlayer}>
             <source src="/videos/simrp_video_spanish_401 (1).mp4" type="video/mp4" />
-            Your browser does not support the video tag.
           </video>
         </div>
 

@@ -1,0 +1,184 @@
+/*************************************
+ * PAGE BACKGROUND + AESTHETICS
+ *************************************/
+.pageWrapper {
+  min-height: 100vh;
+  padding: 80px 20px;
+  background: linear-gradient(145deg, #ecfdfa, #d7faf4, #c7f1e9);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+}
+
+/* Floating Accent Shapes */
+.bgBubble,
+.bgBubble2,
+.bgBubble3 {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(6, 78, 59, 0.06); /* Soft RRS green tint */
+  filter: blur(15px) saturate(120%);
+  animation: float 14s ease-in-out infinite;
+  z-index: 0;
+  opacity: 0.65;
+}
+
+.bgBubble {
+  width: 220px;
+  height: 220px;
+  top: 12%;
+  left: 10%;
+}
+
+.bgBubble2 {
+  width: 150px;
+  height: 150px;
+  bottom: 18%;
+  right: 22%;
+  animation-delay: 2.5s;
+}
+
+.bgBubble3 {
+  width: 130px;
+  height: 130px;
+  top: 45%;
+  right: 12%;
+  animation-delay: 4.5s;
+}
+
+/* Very subtle, professional floating */
+@keyframes float {
+  0%   { transform: translateY(0); }
+  40%  { transform: translateY(-14px); }
+  100% { transform: translateY(0); }
+}
+
+/*************************************
+ * CONTENT ALIGNMENT
+ *************************************/
+.contentBox {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  width: 100%;
+}
+
+
+/*************************************
+ * LOGO
+ *************************************/
+.logoWrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 35px;
+}
+
+.logo {
+  width: 165px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0px 4px 12px rgba(0, 0, 0, 0.12));
+  opacity: 0;
+  animation: fadeInLogo 1.4s ease forwards;
+}
+
+@keyframes fadeInLogo {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+/*************************************
+ * TITLES
+ *************************************/
+.pageTitle {
+  text-align: center;
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: #064e3b;
+  letter-spacing: -0.5px;
+  margin-bottom: 12px;
+  animation: fadeIn 1s ease forwards;
+  opacity: 0;
+}
+
+.pageSubtitle {
+  text-align: center;
+  font-size: 1.25rem;
+  color: #047857;
+  margin-bottom: 55px;
+  max-width: 700px;
+  margin-left: auto;
+  margin-right: auto;
+  font-weight: 400;
+  opacity: 0;
+  animation: fadeIn 1.2s ease forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/*************************************
+ * VIDEO CARD STYLING
+ *************************************/
+.videoCard {
+  background: white;
+  padding: 30px;
+  border-radius: 24px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.06);
+  margin-bottom: 45px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Slight hover lift for polish */
+.videoCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0px 14px 30px rgba(0, 0, 0, 0.09);
+}
+
+.videoTitle {
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: #065f46;
+  margin-bottom: 20px;
+}
+
+/*************************************
+ * VIDEO PLAYER
+ *************************************/
+.videoPlayer {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid #d1d5db;
+  background: #000;
+}
+
+/*************************************
+ * RESPONSIVE DESIGN
+ *************************************/
+@media (max-width: 640px) {
+
+  .pageTitle {
+    font-size: 2.4rem;
+  }
+
+  .videoCard {
+    padding: 22px;
+    border-radius: 18px;
+  }
+
+  .logo {
+    width: 130px;
+  }
+}
