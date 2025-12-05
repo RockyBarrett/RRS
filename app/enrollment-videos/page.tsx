@@ -28,7 +28,7 @@ export default function EnrollmentVideosPage() {
 
         <h1 className={styles.pageTitle}>Enrollment Overview Videos</h1>
         <p className={styles.pageSubtitle}>
-          A simple walkthrough of the SIMRP enrollment process in English and Spanish.
+          A quick overview of the benefits you will receive by enrolling.
         </p>
 
         {/* English Video */}
