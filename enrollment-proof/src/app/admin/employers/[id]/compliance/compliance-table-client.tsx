@@ -263,8 +263,19 @@ export default function ComplianceTableClient({
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Send failed");
+      const raw = await res.text();
+
+let data: any = null;
+try {
+  data = raw ? JSON.parse(raw) : null;
+} catch {
+  // not JSON, keep raw
+}
+
+if (!res.ok) {
+  const msg = data?.error || data?.message || raw || `Send failed (${res.status})`;
+  throw new Error(msg);
+}
 
       const skipped = Number(data?.skippedMissingLink ?? 0);
       const sent = Number(data?.sent ?? 0);

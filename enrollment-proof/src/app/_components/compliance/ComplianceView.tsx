@@ -26,7 +26,8 @@ function fmtDate(d: string | null | undefined) {
 function fmtDateTime(ts: string | null | undefined) {
   if (!ts) return "—";
   try {
-    return new Date(ts).toLocaleString();
+    // Deterministic across server + browser (prevents hydration mismatch)
+    return new Date(ts).toISOString();
   } catch {
     return String(ts);
   }
