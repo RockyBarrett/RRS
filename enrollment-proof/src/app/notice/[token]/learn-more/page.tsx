@@ -246,9 +246,9 @@ export default async function LearnMorePage({ params }: PageProps) {
                   padding: "10px 14px",
                   borderRadius: 14,
                   border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  color: "#111827",
-                  fontWeight: 900,
+                  background: "#5d83a5ff",
+                  color: "#ffffff",
+                  fontWeight: 800,
                   textDecoration: "none",
                 }}
               >

@@ -5,6 +5,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { cardStyle, subtleText, buttonStyle } from "@/app/admin/_ui";
 import EmployeeTableClient from "@/app/admin/employers/[id]/employee-table-client";
 import ConnectEmailMenu from "@/app/_components/ConnectEmailMenu";
+import { getConnectedEmail } from "@/lib/email/getConnectedEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +40,11 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 function EmailStatusPill({
   status,
   email,
+  title,
 }: {
   status: "connected" | "pending" | "none";
   email?: string | null;
+  title?: string;
 }) {
   if (status === "pending") {
     return (
@@ -108,6 +111,7 @@ function EmailStatusPill({
     );
   }
 
+  // NONE
   return (
     <span
       style={{
@@ -123,7 +127,7 @@ function EmailStatusPill({
         fontSize: 12,
         whiteSpace: "nowrap",
       }}
-      title="No sender email connected"
+      title={title || "No sender email connected"}
     >
       <span style={{ width: 8, height: 8, borderRadius: 999, background: "#ef4444" }} />
       Email not connected
@@ -237,23 +241,20 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
 
-  // ✅ Determine pill status:
-  // - If callback said pending: show pending immediately
-  // - Else if employer.sender_email exists: show connected
-  // - Else none
-  const senderEmail = (employer as any).sender_email ? String((employer as any).sender_email) : null;
+  // ✅ Determine pill status using same rules as sending (HR-only sender per employer per HR user)
+const { connectedEmail, reason: connectedEmailReason } = await getConnectedEmail({
+  mode: "hr",
+  employerId: employerId,
+});
 
-  const pillStatus: "connected" | "pending" | "none" =
-    gmailSenderStatus === "pending"
-      ? "pending"
-      : senderEmail
-      ? "connected"
-      : "none";
+const pillStatus: "connected" | "pending" | "none" =
+  gmailSenderStatus === "pending" ? "pending" : connectedEmail ? "connected" : "none";
 
-  const pillEmail =
-    gmailSenderStatus === "pending"
-      ? gmailSenderEmail
-      : senderEmail;
+const pillEmail = gmailSenderStatus === "pending" ? gmailSenderEmail : connectedEmail;
+
+// Optional: if it’s "none", show reason on hover for instant debugging
+const pillTitle =
+  pillStatus === "none" ? (connectedEmailReason || "No sender found") : undefined;
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -273,7 +274,7 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
         </Link>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <EmailStatusPill status={pillStatus} email={pillEmail} />
+          <EmailStatusPill status={pillStatus} email={pillEmail} title={pillTitle} />
 
           <ConnectEmailMenu
   employerId={employerId}

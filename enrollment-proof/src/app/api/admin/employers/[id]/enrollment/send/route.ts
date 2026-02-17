@@ -10,13 +10,62 @@ function b64url(input: string) {
     .replace(/=+$/g, "");
 }
 
+function requireEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env var: ${name}`);
+  return v;
+}
+
+function getCookie(req: Request, name: string) {
+  const cookie = req.headers.get("cookie") || "";
+  const parts = cookie.split(";").map((p) => p.trim());
+  const hit = parts.find((p) => p.startsWith(`${name}=`));
+  return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+}
+
+async function getCaller(req: Request): Promise<
+  | { kind: "admin"; adminUserId: string }
+  | { kind: "hr"; hrUserId: string }
+  | null
+> {
+  const adminToken = getCookie(req, "rrs_admin_session");
+  if (adminToken) {
+    const { data, error } = await supabaseServer
+      .from("admin_sessions")
+      .select("admin_user_id, expires_at")
+      .eq("session_token", adminToken)
+      .maybeSingle();
+
+    if (!error && data?.admin_user_id) {
+      const exp = new Date(String((data as any).expires_at || "")).getTime();
+      if (!exp || Date.now() < exp) return { kind: "admin", adminUserId: String((data as any).admin_user_id) };
+    }
+  }
+
+  const hrToken = getCookie(req, "rrs_hr_session");
+  if (hrToken) {
+    const { data, error } = await supabaseServer
+      .from("hr_sessions")
+      .select("hr_user_id, expires_at")
+      .eq("session_token", hrToken)
+      .maybeSingle();
+
+    if (!error && data?.hr_user_id) {
+      const exp = new Date(String((data as any).expires_at || "")).getTime();
+      if (!exp || Date.now() < exp) return { kind: "hr", hrUserId: String((data as any).hr_user_id) };
+    }
+  }
+
+  return null;
+}
+
 async function refreshAccessToken(refreshToken: string) {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: requireEnv("GOOGLE_CLIENT_ID"),
+      client_secret: requireEnv("GOOGLE_CLIENT_SECRET"),
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
@@ -24,13 +73,10 @@ async function refreshAccessToken(refreshToken: string) {
 
   const json = await res.json().catch(() => ({} as any));
   if (!res.ok || !json.access_token) {
-    throw new Error(json?.error_description || "Failed to refresh access token");
+    throw new Error(json?.error_description || json?.error || "Failed to refresh access token");
   }
 
-  return {
-    access_token: String(json.access_token),
-    expires_in: Number(json.expires_in || 0),
-  };
+  return { access_token: String(json.access_token), expires_in: Number(json.expires_in || 0) };
 }
 
 function isUUID(v: any) {
@@ -48,11 +94,7 @@ function fmtDateNice(dateStr: string | null | undefined) {
   if (!dateStr) return "";
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return String(dateStr);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(d);
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(d);
 }
 
 async function sendGmail({
@@ -77,129 +119,105 @@ async function sendGmail({
     text,
   ].join("\r\n");
 
-  const sendRes = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ raw: b64url(raw) }),
-    }
-  );
+  const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ raw: b64url(raw) }),
+  });
 
   const sendJson = await sendRes.json().catch(() => ({} as any));
   if (!sendRes.ok) throw new Error(sendJson?.error?.message || "Gmail send failed");
   return sendJson;
 }
 
-export async function POST(
-  req: Request,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const caller = await getCaller(req);
+  if (!caller) return Response.json({ error: "Not authenticated" }, { status: 401 });
+
   const { id: employerId } = await ctx.params;
 
   let body: any = {};
-  try {
-    body = await req.json();
-  } catch {}
+  try { body = await req.json(); } catch {}
 
   const employee_id = body?.employee_id;
   const employee_ids = Array.isArray(body?.employee_ids) ? body.employee_ids : null;
   const template_id = body?.template_id;
 
-  // ✅ NEW: optional overrides (used for Preview edits)
-  const subject_override =
-    typeof body?.subject_override === "string" ? body.subject_override : null;
-
-  const body_override =
-    typeof body?.body_override === "string" ? body.body_override : null;
+  const subject_override = typeof body?.subject_override === "string" ? body.subject_override : null;
+  const body_override = typeof body?.body_override === "string" ? body.body_override : null;
 
   const ids: string[] = [];
   if (isUUID(employee_id)) ids.push(employee_id);
   if (employee_ids) for (const x of employee_ids) if (isUUID(x)) ids.push(x);
 
-  if (ids.length === 0) {
-    return Response.json(
-      { error: "Missing employee_id or employee_ids" },
-      { status: 400 }
-    );
-  }
-  if (!isUUID(template_id)) {
-    return Response.json({ error: "Missing template_id" }, { status: 400 });
-  }
+  if (ids.length === 0) return Response.json({ error: "Missing employee_id or employee_ids" }, { status: 400 });
+  if (!isUUID(template_id)) return Response.json({ error: "Missing template_id" }, { status: 400 });
 
-  // Employer (needs sender_email)
   const { data: employer, error: empErr } = await supabaseServer
     .from("employers")
-    .select("id, name, support_email, effective_date, opt_out_deadline, sender_email")
+    .select("id, name, support_email, effective_date, opt_out_deadline")
     .eq("id", employerId)
     .maybeSingle();
 
-  if (empErr || !employer) {
-    return Response.json({ error: "Employer not found" }, { status: 404 });
+  if (empErr || !employer) return Response.json({ error: "Employer not found" }, { status: 404 });
+
+  const { data: tmpl, error: tmplErr } = await supabaseServer
+    .from("email_templates")
+    .select("id, subject, body, is_active")
+    .eq("id", template_id)
+    .maybeSingle();
+
+  if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
+  if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
+
+  // ✅ Sender selection: same hard rules as compliance
+  let acct: any = null;
+
+  if (caller.kind === "admin") {
+    const adminSystemEmail = String(requireEnv("ADMIN_SENDER_EMAIL")).trim().toLowerCase();
+
+    const { data } = await supabaseServer
+      .from("gmail_accounts")
+      .select("user_email, access_token, refresh_token, expires_at, status, connected_by_admin_user_id")
+      .eq("user_email", adminSystemEmail)
+      .is("employer_id", null)
+      .eq("status", "approved")
+      .maybeSingle();
+
+    if (data && (data as any).connected_by_admin_user_id && String((data as any).connected_by_admin_user_id) !== caller.adminUserId) {
+      return Response.json({ error: "Admin sender not owned by this admin user." }, { status: 403 });
+    }
+
+    acct = data;
+  } else {
+    const { data } = await supabaseServer
+      .from("gmail_accounts")
+      .select("user_email, access_token, refresh_token, expires_at, status, employer_id, connected_by_hr_user_id")
+      .eq("status", "approved")
+      .eq("employer_id", employerId)
+      .eq("connected_by_hr_user_id", caller.hrUserId)
+      .maybeSingle();
+
+    acct = data;
   }
 
-  const senderEmail = String((employer as any).sender_email || "")
-    .trim()
-    .toLowerCase();
-
-  if (!senderEmail) {
+  if (!acct) {
     return Response.json(
-      {
-        error:
-          "No sender email connected for this employer yet. Please connect Gmail on the employer page.",
+      { error: caller.kind === "admin"
+          ? "Admin sender not connected/approved. Connect ADMIN_SENDER_EMAIL first."
+          : "No approved sender connected for this employer by this HR user."
       },
       { status: 400 }
     );
   }
 
-  // Template
-  const { data: tmpl, error: tmplErr } = await supabaseServer
-    .from("email_templates")
-    .select("id, name, category, subject, body, is_active")
-    .eq("id", template_id)
-    .maybeSingle();
-
-  if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
-  if ((tmpl as any).is_active === false) {
-    return Response.json({ error: "Template is archived" }, { status: 400 });
-  }
-
-  // Gmail account must be approved AND tied to this employer
-  const { data: acct, error: acctErr } = await supabaseServer
-    .from("gmail_accounts")
-    .select("user_email, access_token, refresh_token, expires_at, status, employer_id")
-    .eq("user_email", senderEmail)
-    .maybeSingle();
-
-  if (acctErr) return Response.json({ error: acctErr.message }, { status: 500 });
-  if (!acct) return Response.json({ error: `Sender email ${senderEmail} is not connected.` }, { status: 400 });
-
-  const status = String((acct as any).status || "");
-  const acctEmployerId = (acct as any).employer_id ? String((acct as any).employer_id) : null;
-
-  if (status !== "approved") {
-    return Response.json({ error: "Sender is pending approval." }, { status: 403 });
-  }
-
-  if (!acctEmployerId || acctEmployerId !== employerId) {
-    return Response.json({ error: "Sender not authorized for this employer." }, { status: 403 });
-  }
-
-  const fromEmail = String((acct as any).user_email || "");
+  const fromEmail = String((acct as any).user_email || "").trim();
   const refreshToken = String((acct as any).refresh_token || "");
   let accessToken = String((acct as any).access_token || "");
-
-  if (!refreshToken) {
-    return Response.json(
-      { error: "Gmail sender is missing refresh_token. Re-connect Gmail." },
-      { status: 500 }
-    );
-  }
-
   const expiresAtMs = new Date(String((acct as any).expires_at || "")).getTime();
+
+  if (!refreshToken) return Response.json({ error: "Sender refresh_token missing. Reconnect sender." }, { status: 400 });
+
   if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
     const refreshed = await refreshAccessToken(refreshToken);
     accessToken = refreshed.access_token;
@@ -208,7 +226,15 @@ export async function POST(
     await supabaseServer
       .from("gmail_accounts")
       .update({ access_token: accessToken, expires_at: newExpiresAt })
-      .eq("user_email", fromEmail);
+      const q = supabaseServer
+  .from("gmail_accounts")
+  .update({ access_token: accessToken, expires_at: newExpiresAt })
+  .eq("user_email", fromEmail);
+
+if (caller.kind === "admin") q.is("employer_id", null);
+else q.eq("employer_id", employerId);
+
+await q;
   }
 
   // Employees
@@ -234,22 +260,10 @@ export async function POST(
     const optedOut = !!(e as any).opted_out_at;
     const token = String((e as any).token || "").trim();
 
-    if (!to.includes("@")) {
-      failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" });
-      continue;
-    }
-    if (!token) {
-      failed.push({ employee_id: (e as any).id, error: "Missing employee token" });
-      continue;
-    }
-    if (!eligible) {
-      failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" });
-      continue;
-    }
-    if (optedOut) {
-      failed.push({ employee_id: (e as any).id, error: "Employee opted out" });
-      continue;
-    }
+    if (!to.includes("@")) { failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" }); continue; }
+    if (!token) { failed.push({ employee_id: (e as any).id, error: "Missing employee token" }); continue; }
+    if (!eligible) { failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" }); continue; }
+    if (optedOut) { failed.push({ employee_id: (e as any).id, error: "Employee opted out" }); continue; }
 
     const vars: Record<string, string> = {
       "employee.first_name": String((e as any).first_name || ""),
@@ -266,18 +280,11 @@ export async function POST(
       "links.learn_more": `${baseUrl}/notice/${token}/learn-more`,
     };
 
-    // Default rendered template
     const renderedSubject = renderTemplate(String((tmpl as any).subject || ""), vars);
     const renderedText = renderTemplate(String((tmpl as any).body || ""), vars);
 
-    // ✅ NEW: apply overrides if provided (still supports {{vars}} if you keep them)
-    const finalSubject = subject_override
-      ? renderTemplate(subject_override, vars)
-      : renderedSubject;
-
-    const finalText = body_override
-      ? renderTemplate(body_override, vars)
-      : renderedText;
+    const finalSubject = subject_override ? renderTemplate(subject_override, vars) : renderedSubject;
+    const finalText = body_override ? renderTemplate(body_override, vars) : renderedText;
 
     try {
       await sendGmail({
@@ -292,7 +299,6 @@ export async function POST(
 
       const now = new Date().toISOString();
 
-      // Event: sent (timestamped)
       await supabaseServer.from("events").insert({
         employer_id: employerId,
         employee_id: (e as any).id,
@@ -300,7 +306,6 @@ export async function POST(
         created_at: now,
       });
 
-      // Employee: first-time notice_sent_at (do not overwrite)
       const alreadySentAt = (e as any).notice_sent_at;
       if (!alreadySentAt) {
         await supabaseServer

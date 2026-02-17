@@ -64,10 +64,10 @@ export default function ConfirmCloseButton({
         borderStyle: "solid",
         borderWidth: 1,
         borderColor: "#e5e7eb",
-        background: done ? "#16a34a" : "#5d83a5ff",
+        background: done ? "#16a34a" : "#5da56bff",
         color: "#ffffff",
-        fontWeight: 800,
-        fontSize: 13,
+        fontWeight: 900,
+        fontSize: 14,
         cursor: busy || done ? "not-allowed" : "pointer",
       }}
       title={done ? "Confirmed" : "Confirm & Close"}

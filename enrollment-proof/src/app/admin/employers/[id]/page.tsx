@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { cardStyle, subtleText, buttonStyle } from "@/app/admin/_ui";
 import EmployeeTableClient from "./employee-table-client";
 import ConnectEmailMenu from "@/app/_components/ConnectEmailMenu";
+import { getConnectedEmail } from "@/lib/email/getConnectedEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -64,20 +65,11 @@ export default async function EmployerDashboard({ params }: PageProps) {
     console.warn("Failed loading enrollment templates:", tplErr.message);
   }
 
-  // Email connection (latest global for now)
-const employerSender = String((employer as any).sender_email || "")
-  .trim()
-  .toLowerCase() || null;
-
-const { data: gmailAcct } = employerSender
-  ? await supabaseServer
-      .from("gmail_accounts")
-      .select("user_email, status, employer_id, created_at")
-      .eq("user_email", employerSender)
-      .maybeSingle()
-  : ({ data: null } as any);
-
-const connectedEmail = gmailAcct?.user_email || null;
+ // Email connection (same rules as sending)
+const {
+  connectedEmail,
+  reason: connectedEmailReason,
+} = await getConnectedEmail({ mode: "admin", employerId: id });
 
   const { data: employees } = await supabaseServer
   .from("employees")
@@ -160,6 +152,7 @@ const connectedEmail = gmailAcct?.user_email || null;
         fontSize: 12,
         whiteSpace: "nowrap",
       }}
+      title={connectedEmailReason || "No sender found"}
     >
       <span style={{ width: 8, height: 8, borderRadius: 999, background: "#ef4444" }} />
       Email not connected
@@ -275,12 +268,13 @@ const connectedEmail = gmailAcct?.user_email || null;
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <EmployeeTableClient
+  <EmployeeTableClient
   employerId={id}
   employees={(employees ?? []) as any}
   events={(events ?? []) as any}
   baseUrl={baseUrl}
   employerName={String(employer.name || "")}
+  supportEmail={String(employer.support_email || "support@company.com")}
   templates={(enrollmentTemplates ?? []) as any}
 />
         </div>

@@ -99,7 +99,10 @@ export default async function NoticePage({ params }: PageProps) {
     : null;
 
   const pastDeadline = deadline ? Date.now() > deadline.getTime() : false;
-  const disableOptOut = !isEligible || isOptedOut || pastDeadline;
+
+// Only lock the decision if they're ineligible or past the deadline.
+// DO NOT lock just because they previously opted out (we want undo).
+const disableDecision = !isEligible || pastDeadline;
 
   return (
     <main
@@ -291,8 +294,8 @@ export default async function NoticePage({ params }: PageProps) {
                     padding: "8px 10px",
                     borderRadius: 12,
                     border: "1px solid #e5e7eb",
-                    background: "#ffffff",
-                    color: "#111827",
+                    background: "#5d83a5ff",
+                    color: "#ffffff",
                     fontWeight: 900,
                     fontSize: 13,
                     textDecoration: "none",
@@ -310,12 +313,12 @@ export default async function NoticePage({ params }: PageProps) {
               />
 
               <NoticeClient
-                token={token}
-                disabled={disableOptOut}
-                initialOptedOut={isOptedOut}
-                supportEmail={supportEmail}
-                pastDeadline={pastDeadline}
-              />
+  token={token}
+  disabled={disableDecision}
+  initialOptedOut={isOptedOut}
+  supportEmail={supportEmail}
+  pastDeadline={pastDeadline}
+/>
 
               {/* Terms link (right aligned) */}
               <div
