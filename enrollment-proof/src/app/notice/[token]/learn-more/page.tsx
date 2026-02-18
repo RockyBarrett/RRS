@@ -202,7 +202,7 @@ export default async function LearnMorePage({ params }: PageProps) {
                 <div style={{ height: 1, background: "#e5e7eb" }} />
 
                 <a
-                  href="/docs/paycheck-reimbursement.pdf"
+                  href="/docs/paycheck-reimbursement.pdf.jpg"
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -215,7 +215,7 @@ export default async function LearnMorePage({ params }: PageProps) {
                     fontWeight: 800,
                   }}
                 >
-                  <span>Paycheck Reimbursement Example (PDF)</span>
+                  <span>Paycheck Reimbursement Example (jpg)</span>
                   <span style={{ color: "#64748b", fontWeight: 900 }}>
                     Open →
                   </span>
