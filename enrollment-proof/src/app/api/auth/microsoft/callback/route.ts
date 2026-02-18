@@ -1,5 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+// /src/app/api/auth/microsoft/callback/route.ts
+import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import crypto from "crypto";
 
 export const runtime = "nodejs";
 
@@ -15,16 +17,95 @@ type TokenResponse = {
   error_description?: string;
 };
 
+function cookieSecureFlag() {
+  return process.env.NODE_ENV === "production" ? "; Secure" : "";
+}
+
+function getCookie(req: Request, name: string) {
+  const cookie = req.headers.get("cookie") || "";
+  const parts = cookie.split(";").map((p) => p.trim());
+  const hit = parts.find((p) => p.startsWith(`${name}=`));
+  return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
+}
+
+function clearCookie(res: NextResponse, name: string) {
+  res.headers.append(
+    "Set-Cookie",
+    `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${cookieSecureFlag()}`
+  );
+}
+
+function safeReturnTo(path: string) {
+  if (!path.startsWith("/")) return "/login";
+  if (path.startsWith("//")) return "/login";
+  return path;
+}
+
 function mustEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
   return v;
 }
 
+function isoFromExpiresIn(expiresInSeconds: number | undefined) {
+  const ms = Math.max(0, Number(expiresInSeconds || 0)) * 1000;
+  return new Date(Date.now() + ms).toISOString();
+}
+
+function makeSessionToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+async function getHrUserIdFromSession(req: Request) {
+  const token = getCookie(req, "rrs_hr_session");
+  if (!token) return null;
+
+  const { data } = await supabaseServer
+    .from("hr_sessions")
+    .select("hr_user_id, expires_at")
+    .eq("session_token", token)
+    .maybeSingle();
+
+  if (!data?.hr_user_id) return null;
+
+  const exp = new Date(String((data as any).expires_at || "")).getTime();
+  if (exp && Date.now() > exp) return null;
+
+  return String((data as any).hr_user_id);
+}
+
+async function getAdminUserIdFromSession(req: Request) {
+  const token = getCookie(req, "rrs_admin_session");
+  if (!token) return null;
+
+  const { data } = await supabaseServer
+    .from("admin_sessions")
+    .select("admin_user_id, expires_at")
+    .eq("session_token", token)
+    .maybeSingle();
+
+  if (!data?.admin_user_id) return null;
+
+  const exp = new Date(String((data as any).expires_at || "")).getTime();
+  if (exp && Date.now() > exp) return null;
+
+  return String((data as any).admin_user_id);
+}
+
 async function exchangeMicrosoftCodeForToken(code: string, redirectUri: string) {
-  const tenant = mustEnv("MICROSOFT_TENANT_ID");
+  const tenant = mustEnv("MICROSOFT_TENANT_ID"); // set to "organizations" for multi-tenant
   const client_id = mustEnv("MICROSOFT_CLIENT_ID");
   const client_secret = mustEnv("MICROSOFT_CLIENT_SECRET");
+
+  // Must match what you asked for in /login and /connect routes
+  const scope = [
+    "openid",
+    "profile",
+    "email",
+    "offline_access",
+    "User.Read",
+    "Mail.Send",
+  ].join(" ");
 
   const res = await fetch(
     `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
@@ -37,95 +118,292 @@ async function exchangeMicrosoftCodeForToken(code: string, redirectUri: string) 
         grant_type: "authorization_code",
         code,
         redirect_uri: redirectUri,
-        // v2 requires scopes; match what you used in login:
-        scope: "offline_access https://graph.microsoft.com/.default",
+        scope,
       }),
     }
   );
 
-  const data = (await res.json()) as TokenResponse;
+  const data = (await res.json().catch(() => ({} as any))) as TokenResponse;
 
   if (!res.ok || data.error) {
     throw new Error(data.error_description || data.error || `Token exchange failed (${res.status})`);
   }
-  if (!data.access_token) {
-    throw new Error("Token exchange missing access_token");
-  }
+  if (!data.access_token) throw new Error("Token exchange missing access_token");
+
   return data;
 }
 
-/**
- * GET /api/auth/microsoft/callback
- * Next 16 expects params to be a Promise in dynamic segments, but this route has no params.
- */
-export async function GET(request: NextRequest) {
-  try {
-    const url = request.nextUrl;
+async function fetchMicrosoftProfile(accessToken: string) {
+  const res = await fetch("https://graph.microsoft.com/v1.0/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
 
-    const error = url.searchParams.get("error");
-    const errorDescription = url.searchParams.get("error_description");
-    if (error) {
+  const json = await res.json().catch(() => ({} as any));
+  if (!res.ok) {
+    throw new Error(json?.error?.message || "Failed to fetch Microsoft profile");
+  }
+
+  const email =
+    (json?.mail as string | undefined) ||
+    (json?.userPrincipalName as string | undefined) ||
+    "";
+
+  const displayName = (json?.displayName as string | undefined) || null;
+
+  return {
+    email: String(email).trim().toLowerCase(),
+    name: displayName ? String(displayName).trim() : null,
+  };
+}
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+
+    // If Microsoft sent an OAuth error
+    const oauthErr = url.searchParams.get("error");
+    const oauthErrDesc = url.searchParams.get("error_description");
+    if (oauthErr) {
       const to = new URL("/login", url.origin);
-      to.searchParams.set("error", error);
-      if (errorDescription) to.searchParams.set("error_description", errorDescription);
+      to.searchParams.set("error", oauthErr);
+      if (oauthErrDesc) to.searchParams.set("error_description", oauthErrDesc);
       return NextResponse.redirect(to);
     }
 
     const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state"); // if you use it
-
     if (!code) {
       const to = new URL("/login", url.origin);
       to.searchParams.set("error", "missing_code");
       return NextResponse.redirect(to);
     }
 
-    // IMPORTANT: use your production redirect URI (matches env var)
-    // If you have MICROSOFT_REDIRECT_URI set, use that; otherwise fall back to derived origin.
+    const flow = (getCookie(req, "rrs_oauth_flow") || "ms_login").toLowerCase();
+
+    const returnToCookie = getCookie(req, "rrs_oauth_return_to");
+    const defaultReturnTo =
+      flow === "ms_admin" ? "/admin" : flow === "ms_employer" ? "/hr" : "/login";
+    const returnTo = safeReturnTo(returnToCookie || defaultReturnTo);
+
+    const employerId = getCookie(req, "rrs_oauth_employer_id"); // only for ms_employer
+
     const redirectUri =
       process.env.MICROSOFT_REDIRECT_URI || `${url.origin}/api/auth/microsoft/callback`;
 
-    const token = await exchangeMicrosoftCodeForToken(code, redirectUri);
-
-    // Store tokens in Supabase
-    // ✅ Change these to match YOUR schema
-    const sb = supabaseServer;
-
-    // Example table name + columns (edit as needed):
-    // table: microsoft_tokens
-    // columns: access_token, refresh_token, expires_in, scope, token_type, updated_at
-    //
-    // If you link tokens to a user/session via "state", do it here.
-    // For now we'll upsert a single row keyed by "state" if present, else a singleton key.
-    const tokenKey = state || "default";
-
-    const { error: upsertErr } = await sb
-      .from("microsoft_tokens")
-      .upsert(
-        {
-          key: tokenKey,
-          access_token: token.access_token,
-          refresh_token: token.refresh_token ?? null,
-          expires_in: token.expires_in ?? null,
-          scope: token.scope ?? null,
-          token_type: token.token_type ?? null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" }
-      );
-
-    if (upsertErr) {
-      throw new Error(`Supabase upsert failed: ${upsertErr.message}`);
+    const tokens = await exchangeMicrosoftCodeForToken(code, redirectUri);
+    const profile = await fetchMicrosoftProfile(String(tokens.access_token));
+    if (!profile.email) {
+      throw new Error("Microsoft profile missing email (mail/userPrincipalName).");
     }
 
-    // Redirect somewhere sensible after connect
-    const to = new URL("/admin", url.origin);
-    to.searchParams.set("connected", "microsoft");
-    return NextResponse.redirect(to);
-  } catch (e: any) {
-    const to = new URL("/login", request.nextUrl.origin);
+    const expiresAt = isoFromExpiresIn(tokens.expires_in);
+
+    // ----------------------------
+    // MS EMPLOYER FLOW (HR only)
+    // ----------------------------
+    if (flow === "ms_employer") {
+      const hrUserId = await getHrUserIdFromSession(req);
+      if (!hrUserId) {
+        return NextResponse.json(
+          { error: "HR session required to connect employer sender." },
+          { status: 401 }
+        );
+      }
+      if (!employerId) {
+        return NextResponse.json(
+          { error: "Missing employer context for ms_employer connect." },
+          { status: 400 }
+        );
+      }
+
+      // NEVER wipe refresh_token if Microsoft didn't return it (rare, but safe)
+      const { data: existing } = await supabaseServer
+        .from("microsoft_accounts")
+        .select("refresh_token")
+        .eq("user_email", profile.email)
+        .eq("employer_id", employerId)
+        .maybeSingle();
+
+      const refreshToStore =
+        (tokens.refresh_token && String(tokens.refresh_token).trim()) ||
+        (existing?.refresh_token ? String((existing as any).refresh_token) : null);
+
+      if (!refreshToStore) {
+        return NextResponse.json(
+          { error: "Microsoft did not return refresh_token. Reconnect with prompt=select_account and ensure offline_access scope." },
+          { status: 400 }
+        );
+      }
+
+      const { error: upErr } = await supabaseServer
+        .from("microsoft_accounts")
+        .upsert(
+          {
+            user_email: profile.email,
+            access_token: tokens.access_token,
+            refresh_token: refreshToStore,
+            expires_at: expiresAt,
+            scope: tokens.scope ? String(tokens.scope) : null,
+            status: "approved",
+            employer_id: employerId,
+            connected_by_hr_user_id: hrUserId,
+          },
+          { onConflict: "user_email,employer_id" }
+        );
+
+      if (upErr) throw new Error(upErr.message);
+
+      const to = new URL(returnTo, url.origin);
+      to.searchParams.set("ms_sender_status", "approved");
+      to.searchParams.set("ms_sender_email", profile.email);
+
+      const res = NextResponse.redirect(to);
+
+      clearCookie(res, "rrs_oauth_return_to");
+      clearCookie(res, "rrs_oauth_flow");
+      clearCookie(res, "rrs_oauth_employer_id");
+
+      return res;
+    }
+
+    // ----------------------------
+    // MS ADMIN FLOW (Admin only)
+    // ----------------------------
+    if (flow === "ms_admin") {
+      const adminUserId = await getAdminUserIdFromSession(req);
+      if (!adminUserId) {
+        return NextResponse.json(
+          { error: "Admin session required to connect admin sender." },
+          { status: 401 }
+        );
+      }
+
+      const { data: existing } = await supabaseServer
+        .from("microsoft_accounts")
+        .select("refresh_token")
+        .eq("user_email", profile.email)
+        .is("employer_id", null)
+        .maybeSingle();
+
+      const refreshToStore =
+        (tokens.refresh_token && String(tokens.refresh_token).trim()) ||
+        (existing?.refresh_token ? String((existing as any).refresh_token) : null);
+
+      if (!refreshToStore) {
+        return NextResponse.json(
+          { error: "Microsoft did not return refresh_token. Reconnect and ensure offline_access scope." },
+          { status: 400 }
+        );
+      }
+
+      const { error: upErr } = await supabaseServer
+        .from("microsoft_accounts")
+        .upsert(
+          {
+            user_email: profile.email,
+            access_token: tokens.access_token,
+            refresh_token: refreshToStore,
+            expires_at: expiresAt,
+            scope: tokens.scope ? String(tokens.scope) : null,
+            status: "approved",
+            employer_id: null,
+            connected_by_admin_user_id: adminUserId,
+          },
+          { onConflict: "user_email" }
+        );
+
+      if (upErr) throw new Error(upErr.message);
+
+      const to = new URL(returnTo, url.origin);
+      to.searchParams.set("ms_sender_status", "approved");
+      to.searchParams.set("ms_sender_email", profile.email);
+
+      const res = NextResponse.redirect(to);
+
+      clearCookie(res, "rrs_oauth_return_to");
+      clearCookie(res, "rrs_oauth_flow");
+
+      return res;
+    }
+
+    // ----------------------------
+    // MS LOGIN FLOW (Admin or HR)
+    // ----------------------------
+
+    const email = profile.email;
+
+    const { data: adminRow } = await supabaseServer
+      .from("admin_users")
+      .select("id, email")
+      .eq("email", email)
+      .maybeSingle();
+
+    const isAdmin = !!adminRow;
+
+    if (isAdmin) {
+      const adminSessionToken = makeSessionToken();
+      const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+
+      const { error: adminSessErr } = await supabaseServer.from("admin_sessions").insert({
+        admin_user_id: (adminRow as any).id,
+        session_token: adminSessionToken,
+        expires_at: expires.toISOString(),
+      });
+
+      if (adminSessErr) throw new Error(adminSessErr.message);
+
+      const res = NextResponse.redirect(new URL("/admin", url.origin));
+
+      res.headers.append(
+        "Set-Cookie",
+        `rrs_admin_session=${encodeURIComponent(adminSessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+          60 * 60 * 24 * 14
+        }${cookieSecureFlag()}`
+      );
+
+      clearCookie(res, "rrs_oauth_return_to");
+      clearCookie(res, "rrs_oauth_flow");
+      clearCookie(res, "rrs_oauth_employer_id");
+
+      return res;
+    }
+
+    const { data: hrUser, error: hrErr } = await supabaseServer
+      .from("hr_users")
+      .upsert({ email, display_name: profile.name }, { onConflict: "email" })
+      .select("id, email")
+      .single();
+
+    if (hrErr || !hrUser) throw new Error(hrErr?.message || "Failed to create HR user");
+
+    const sessionToken = makeSessionToken();
+    const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
+
+    const { error: sessErr } = await supabaseServer.from("hr_sessions").insert({
+      hr_user_id: hrUser.id,
+      session_token: sessionToken,
+      expires_at: expires.toISOString(),
+    });
+
+    if (sessErr) throw new Error(sessErr.message);
+
+    const res = NextResponse.redirect(new URL("/hr", url.origin));
+
+    res.headers.append(
+      "Set-Cookie",
+      `rrs_hr_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+        60 * 60 * 24 * 14
+      }${cookieSecureFlag()}`
+    );
+
+    clearCookie(res, "rrs_oauth_return_to");
+    clearCookie(res, "rrs_oauth_flow");
+    clearCookie(res, "rrs_oauth_employer_id");
+
+    return res;
+  } catch (err: any) {
+    const to = new URL("/login", new URL(req.url).origin);
     to.searchParams.set("error", "microsoft_callback_failed");
-    to.searchParams.set("message", e?.message || "Unknown error");
+    to.searchParams.set("message", err?.message || "Unknown error");
     return NextResponse.redirect(to);
   }
 }

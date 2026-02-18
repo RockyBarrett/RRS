@@ -7,14 +7,12 @@ function cookieSecureFlag() {
 }
 
 function buildMicrosoftAuthUrl() {
-  const tenant = process.env.MICROSOFT_TENANT_ID!;
-  const scope = [
-    "openid",
-    "profile",
-    "email",
-    "offline_access",
-    "User.Read",
-  ].join(" ");
+  // ✅ Multi-tenant fix:
+  // Use "organizations" so ANY Entra ID (work/school) tenant can sign in.
+  // (Use "common" only if you also want personal Microsoft accounts and your app is configured for it.)
+  const tenant = (process.env.MICROSOFT_TENANT || "organizations").trim();
+
+  const scope = ["openid", "profile", "email", "offline_access", "User.Read"].join(" ");
 
   const params = new URLSearchParams({
     client_id: process.env.MICROSOFT_CLIENT_ID!,
@@ -25,7 +23,9 @@ function buildMicrosoftAuthUrl() {
     prompt: "select_account",
   });
 
-  return `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/authorize?${params.toString()}`;
+  return `https://login.microsoftonline.com/${encodeURIComponent(
+    tenant
+  )}/oauth2/v2.0/authorize?${params.toString()}`;
 }
 
 export async function GET(req: Request) {

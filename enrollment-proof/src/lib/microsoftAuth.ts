@@ -1,7 +1,10 @@
 // /src/lib/microsoftAuth.ts
 import { supabaseServer } from "@/lib/supabaseServer";
 
-export const MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+const MICROSOFT_TENANT = (process.env.MICROSOFT_TENANT || "organizations").trim();
+export const MICROSOFT_TOKEN_URL = `https://login.microsoftonline.com/${encodeURIComponent(
+  MICROSOFT_TENANT
+)}/oauth2/v2.0/token`;
 
 function requiredEnv(name: string) {
   const v = process.env[name];
@@ -23,8 +26,6 @@ export function isExpiredSoon(expiresAt: string | null | undefined, skewMs = 60_
 
 /**
  * Refresh Entra (work/school) access token using refresh_token
- * NOTE: We use "common" token endpoint here because refresh works for the user’s tenant.
- * If you want to hard-pin tenant, replace "common" with your tenant ID.
  */
 export async function refreshMicrosoftAccessToken(refreshToken: string) {
   const client_id = requiredEnv("MICROSOFT_CLIENT_ID");
@@ -38,8 +39,10 @@ export async function refreshMicrosoftAccessToken(refreshToken: string) {
       client_secret,
       grant_type: "refresh_token",
       refresh_token: String(refreshToken),
-      // "scope" on refresh is optional; if provided, must include offline_access to keep refresh tokens healthy
-      scope: "openid profile email offline_access Mail.Send User.Read",
+
+      // ✅ Keep this aligned with what your app actually needs.
+      // For login-only: no Mail.Send
+      scope: "openid profile email offline_access User.Read",
     }),
   });
 
@@ -75,8 +78,6 @@ export async function ensureMicrosoftAccessToken(args: {
     const refreshed = await refreshMicrosoftAccessToken(args.refreshToken);
 
     const nextExpiresAt = isoFromExpiresIn(refreshed.expires_in);
-
-    // If Microsoft rotates refresh_token, store the new one
     const nextRefreshToken = refreshed.refresh_token || args.refreshToken;
 
     const { error } = await supabaseServer
@@ -93,14 +94,8 @@ export async function ensureMicrosoftAccessToken(args: {
       throw new Error(`Failed to persist refreshed Microsoft token: ${error.message}`);
     }
 
-    return {
-      access_token: refreshed.access_token,
-      expires_at: nextExpiresAt,
-    };
+    return { access_token: refreshed.access_token, expires_at: nextExpiresAt };
   }
 
-  return {
-    access_token: String(args.accessToken),
-    expires_at: String(args.expiresAt),
-  };
+  return { access_token: String(args.accessToken), expires_at: String(args.expiresAt) };
 }
