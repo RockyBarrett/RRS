@@ -16,15 +16,19 @@ export async function POST(req: Request) {
 
     if (findError || !employee) throw new Error("Employee not found");
 
-    // Only set opted_out_at first time
+    // ✅ Always record election = opt_out
+    // Only set opted_out_at the first time (keeps original timestamp)
+    const updatePayload: Record<string, any> = { election: "opt_out" };
     if (!employee.opted_out_at) {
-      const { error: updateError } = await supabaseServer
-        .from("employees")
-        .update({ opted_out_at: now })
-        .eq("id", employee.id);
-
-      if (updateError) throw updateError;
+      updatePayload.opted_out_at = now;
     }
+
+    const { error: updateError } = await supabaseServer
+      .from("employees")
+      .update(updatePayload)
+      .eq("id", employee.id);
+
+    if (updateError) throw updateError;
 
     const { error: eventError } = await supabaseServer.from("events").insert({
       employee_id: employee.id,

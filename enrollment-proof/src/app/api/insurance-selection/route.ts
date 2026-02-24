@@ -21,9 +21,10 @@ export async function POST(req: Request) {
       .eq("token", token)
       .maybeSingle();
 
-    if (findError || !employee) throw new Error("Employee not found");
+    if (findError || !employee) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
 
-    // Always update selection + selected_at (this can change if they toggle back)
     const { error: updateError } = await supabaseServer
       .from("employees")
       .update({

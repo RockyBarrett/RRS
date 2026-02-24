@@ -34,7 +34,7 @@ export default async function NoticePage({ params }: PageProps) {
 
   const { data: employee } = await supabaseServer
     .from("employees")
-    .select("id, employer_id, first_name, eligible, annual_savings_cents, opted_out_at")
+    .select("id, employer_id, first_name, eligible, annual_savings_cents, opted_out_at, election")
     .eq("token", token)
     .maybeSingle();
 
@@ -60,7 +60,7 @@ export default async function NoticePage({ params }: PageProps) {
 
   const { data: employer } = await supabaseServer
     .from("employers")
-    .select("name, support_email, effective_date, opt_out_deadline")
+    .select("name, support_email, effective_date, opt_out_deadline, enrollment_type")
     .eq("id", employee.employer_id)
     .maybeSingle();
 
@@ -83,6 +83,10 @@ export default async function NoticePage({ params }: PageProps) {
     );
   }
 
+  const enrollmentType = (employer as any)?.enrollment_type ?? "passive";
+  const isActiveEnrollment = enrollmentType === "active";
+  const election = ((employee as any)?.election ?? null) as "opt_in" | "opt_out" | null;
+
   const baselineAnnual = employee.annual_savings_cents ?? 0;
   const isOptedOut = !!employee.opted_out_at;
 
@@ -100,9 +104,9 @@ export default async function NoticePage({ params }: PageProps) {
 
   const pastDeadline = deadline ? Date.now() > deadline.getTime() : false;
 
-// Only lock the decision if they're ineligible or past the deadline.
-// DO NOT lock just because they previously opted out (we want undo).
-const disableDecision = !isEligible || pastDeadline;
+  // Only lock the decision if they're ineligible or past the deadline.
+  // DO NOT lock just because they previously opted out (we want undo).
+  const disableDecision = !isEligible || pastDeadline;
 
   return (
     <main
@@ -140,7 +144,7 @@ const disableDecision = !isEligible || pastDeadline;
                 textTransform: "uppercase",
               }}
             >
-              Important Benefits Notice
+              {isActiveEnrollment ? "Action Required" : "Important Benefits Notice"}
             </div>
 
             <div
@@ -162,7 +166,10 @@ const disableDecision = !isEligible || pastDeadline;
             </div>
 
             <p style={{ marginTop: 10, color: "#4b5563" }}>
-              Hi {greetingName} — please review the statement below.
+              Hi {greetingName} —{" "}
+              {isActiveEnrollment
+                ? "please make a selection below to complete your enrollment."
+                : "please review the statement below."}
             </p>
           </div>
 
@@ -262,7 +269,20 @@ const disableDecision = !isEligible || pastDeadline;
                 }}
               >
                 <strong style={{ color: "#111827" }}>How this works</strong>
-                <div>No action is required if you wish to participate. If you prefer not to participate, you may opt out before the deadline above.</div>
+                <div>
+                  {isActiveEnrollment ? (
+                    <>
+                      Please select <strong>Opt In</strong> or <strong>Opt Out</strong> below. After
+                      selecting an option, click <strong>Confirm &amp; Close</strong> to record your
+                      decision.
+                    </>
+                  ) : (
+                    <>
+                      No action is required if you wish to participate. If you prefer not to
+                      participate, you may opt out before the deadline above.
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -310,15 +330,18 @@ const disableDecision = !isEligible || pastDeadline;
                 token={token}
                 isOptedOut={isOptedOut}
                 supportEmail={supportEmail}
+                enrollmentType={enrollmentType}
               />
 
               <NoticeClient
-  token={token}
-  disabled={disableDecision}
-  initialOptedOut={isOptedOut}
-  supportEmail={supportEmail}
-  pastDeadline={pastDeadline}
-/>
+                token={token}
+                disabled={disableDecision}
+                initialOptedOut={isOptedOut}
+                supportEmail={supportEmail}
+                pastDeadline={pastDeadline}
+                enrollmentType={enrollmentType}
+                initialElection={election}
+              />
 
               {/* Terms link (right aligned) */}
               <div
@@ -357,11 +380,10 @@ const disableDecision = !isEligible || pastDeadline;
               }}
             >
               <div>
-                Questions? Contact{" "}
-                <strong style={{ color: "#111827" }}>{supportEmail}</strong>
+                Questions? Contact <strong style={{ color: "#111827" }}>{supportEmail}</strong>
               </div>
 
-              <ConfirmCloseButton token={token} />
+              <ConfirmCloseButton token={token} enrollmentType={enrollmentType} election={election} />
             </div>
           </div>
         </div>

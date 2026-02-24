@@ -32,7 +32,23 @@ function EmployerRow({ e }: { e: any }) {
       }}
     >
       <div style={{ minWidth: 280 }}>
-        <div style={{ fontWeight: 900, fontSize: 15, color: "#111827" }}>{e.name}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+  <div style={{ fontWeight: 900, fontSize: 15, color: "#111827" }}>{e.name}</div>
+
+  <span
+    style={{
+      fontSize: 11,
+      fontWeight: 900,
+      padding: "3px 8px",
+      borderRadius: 999,
+      border: "1px solid #e5e7eb",
+      background: "#ffffff",
+      color: "#111827",
+    }}
+  >
+    {e.enrollment_type === "active" ? "Active Enrollment" : "Passive Enrollment"}
+  </span>
+</div>
 
         <div style={{ ...subtleText, fontSize: 13, marginTop: 6, lineHeight: 1.6 }}>
           Effective: <strong style={{ color: "#111827" }}>{fmtDate(e.effective_date)}</strong>
@@ -62,13 +78,13 @@ function EmployerRow({ e }: { e: any }) {
 export default async function AdminHome() {
   const { data: employers, error } = await supabaseServer
     .from("employers")
-    .select("id, name, effective_date, opt_out_deadline, support_email, created_at")
+    .select("id, name, effective_date, opt_out_deadline, support_email, created_at, enrollment_type")
     .order("created_at", { ascending: false });
 
   const list = employers ?? [];
 
-  const active = list.filter((e: any) => isActive(e.effective_date));
-  const enrolling = list.filter((e: any) => !isActive(e.effective_date));
+  const liveEmployers = list.filter((e: any) => isActive(e.effective_date));
+const enrollingEmployers = list.filter((e: any) => !isActive(e.effective_date));
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -155,14 +171,14 @@ export default async function AdminHome() {
           </div>
 
           <div style={{ ...subtleText, fontSize: 13 }}>
-            Count: <strong style={{ color: "#111827" }}>{enrolling.length}</strong>
+            Count: <strong style={{ color: "#111827" }}>{enrollingEmployers.length}</strong>
           </div>
         </div>
 
-        {enrolling.length === 0 ? (
+        {enrollingEmployers.length === 0 ? (
           <div style={{ padding: 16, ...subtleText }}>No enrolling employers right now.</div>
         ) : (
-          enrolling.map((e: any) => <EmployerRow key={e.id} e={e} />)
+          enrollingEmployers.map((e: any) => <EmployerRow key={e.id} e={e} />)
         )}
       </div>
 
@@ -187,14 +203,14 @@ export default async function AdminHome() {
           </div>
 
           <div style={{ ...subtleText, fontSize: 13 }}>
-            Count: <strong style={{ color: "#111827" }}>{active.length}</strong>
+            Count: <strong style={{ color: "#111827" }}>{liveEmployers.length}</strong>
           </div>
         </div>
 
-        {active.length === 0 ? (
+        {liveEmployers.length === 0 ? (
           <div style={{ padding: 16, ...subtleText }}>No active employers yet.</div>
         ) : (
-          active.map((e: any) => <EmployerRow key={e.id} e={e} />)
+          liveEmployers.map((e: any) => <EmployerRow key={e.id} e={e} />)
         )}
       </div>
     </main>

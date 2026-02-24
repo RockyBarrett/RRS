@@ -16,9 +16,10 @@ export async function POST(req: Request) {
 
     if (findError || !employee) throw new Error("Employee not found");
 
+    // ✅ NEW: record election = opt_in, and clear opted_out_at
     const { error: updateError } = await supabaseServer
       .from("employees")
-      .update({ opted_out_at: null })
+      .update({ opted_out_at: null, election: "opt_in" })
       .eq("id", employee.id);
 
     if (updateError) throw updateError;

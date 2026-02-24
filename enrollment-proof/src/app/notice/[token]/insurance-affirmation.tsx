@@ -7,71 +7,105 @@ type Props = {
   token: string;
   isOptedOut: boolean;
   supportEmail: string;
+  enrollmentType?: "passive" | "active" | string;
 };
+
+const LS_KEY = (token: string) => `flow_insurance_selection_${token}`;
 
 export default function InsuranceAffirmation({
   token,
   isOptedOut,
   supportEmail,
+  enrollmentType = "passive",
 }: Props) {
   const router = useRouter();
+  const isActiveEnrollment = enrollmentType === "active";
 
-  const [selection, setSelection] = React.useState<"yes" | "no">("yes");
+  const [selection, setSelection] = React.useState<"yes" | "no" | null>(
+    isActiveEnrollment ? null : "yes"
+  );
   const [busy, setBusy] = React.useState(false);
 
-  // ✅ Keep UI in sync with server truth after router.refresh()
-  // If opted out => show "no" selected; if not opted out => default to "yes"
   React.useEffect(() => {
-    setSelection(isOptedOut ? "no" : "yes");
-  }, [isOptedOut]);
+    if (isOptedOut) {
+      setSelection("no");
+      return;
+    }
+    setSelection(isActiveEnrollment ? null : "yes");
+  }, [isOptedOut, isActiveEnrollment]);
+
+  function broadcastLocalInsurance(next: "yes" | "no" | null) {
+    try {
+      if (next) localStorage.setItem(LS_KEY(token), next);
+      else localStorage.removeItem(LS_KEY(token));
+
+      window.dispatchEvent(
+        new CustomEvent("flow:insurance-selection", {
+          detail: { token, selection: next },
+        })
+      );
+    } catch {}
+  }
+
+  async function saveInsuranceSelection(next: "yes" | "no") {
+    const res = await fetch("/api/insurance-selection", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, selection: next }),
+    });
+
+    const json = await res.json().catch(() => ({} as any));
+    if (!res.ok) throw new Error(json?.error || "Failed to save insurance selection");
+
+    router.refresh();
+  }
 
   async function handleSelect(next: "yes" | "no") {
     if (busy || isOptedOut) return;
 
-    await fetch("/api/insurance-selection", {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({ token, selection: next }),
-});
-
-    if (next === "yes") {
-      setSelection("yes");
-      return;
-    }
-
-    const ok = window.confirm(
-      "If you do not have qualified health insurance, you must opt out of this program.\n\nDo you want to opt out now?"
-    );
-
-    if (!ok) {
-      setSelection("yes");
-      return;
-    }
-
     setBusy(true);
-    setSelection("no");
 
     try {
-      const res = await fetch("/api/opt-out", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
+      if (next === "no") {
+        const ok = window.confirm(
+          "If you do not have qualified health insurance, you must opt out of this program.\n\nDo you want to opt out now?"
+        );
 
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || "Opt-out failed");
+        if (!ok) {
+          const fallback = isActiveEnrollment ? null : "yes";
+          setSelection(fallback);
+          broadcastLocalInsurance(fallback);
+          return;
+        }
+      }
 
-      // ✅ This triggers server re-fetch so isOptedOut updates
-      router.refresh();
-    } catch (err) {
-      alert("Something went wrong while opting out. Please contact support.");
-      setSelection("yes");
+      setSelection(next);
+      broadcastLocalInsurance(next);
+
+      await saveInsuranceSelection(next);
+
+      if (next === "no") {
+        const res = await fetch("/api/opt-out", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+
+        const json = await res.json().catch(() => ({} as any));
+        if (!res.ok) throw new Error(json?.error || "Opt-out failed");
+
+        router.refresh();
+      }
+    } catch (err: any) {
+      alert(err?.message || "Something went wrong. Please contact support.");
+      const fallback = isActiveEnrollment ? null : "yes";
+      setSelection(fallback);
+      broadcastLocalInsurance(fallback);
     } finally {
       setBusy(false);
     }
   }
 
-  // --- Custom Checkbox Styling (NO shorthand border) ---
   const checkboxBase: React.CSSProperties = {
     marginTop: 3,
     width: 14,
@@ -82,7 +116,7 @@ export default function InsuranceAffirmation({
     display: "inline-block",
     borderStyle: "solid",
     borderWidth: 1,
-    borderColor: "#5d83a5ff", // unchecked outline
+    borderColor: "#5d83a5ff",
     background: "#ffffff",
   };
 
@@ -127,28 +161,51 @@ export default function InsuranceAffirmation({
         padding: 14,
       }}
     >
-      <div
-        style={{
-          fontSize: 12,
-          color: "#6b7280",
-          letterSpacing: 0.4,
-          textTransform: "uppercase",
-          marginBottom: 8,
-        }}
-      >
-        Insurance affirmation
-      </div>
+      {isActiveEnrollment ? (
+        <>
+          <div style={{ fontWeight: 900, color: "#111827" }}>
+            Step 1 (Required): Confirm health coverage
+          </div>
 
-      <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
-        <strong style={{ color: "#111827" }}>
-          You must have some form of qualified health insurance to participate in this program
-        </strong>
-      . Qualified coverage may include employer coverage, spouse/parent plan, ACA
-        exchange (if not receiving a subsidy), TRICARE, or Medicare Part A or C.{" "}
-        <strong style={{ color: "#111827" }}>
-          Medicaid is not considered qualified health insurance.
-        </strong>
-      </div>
+          <div style={{ marginTop: 6, fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
+            This program is available to employees who already have qualified health coverage.
+            Please confirm your current coverage status below to continue.
+          </div>
+
+          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280", lineHeight: 1.5 }}>
+            Qualified coverage may include employer coverage, a spouse/parent plan, an ACA exchange
+            plan (if not receiving a subsidy), TRICARE, or Medicare Part A or C.
+            <strong style={{ color: "#111827" }}>
+              {" "}Medicaid is not considered qualified coverage.
+            </strong>
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              fontSize: 12,
+              color: "#6b7280",
+              letterSpacing: 0.4,
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            Insurance affirmation
+          </div>
+
+          <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
+            <strong style={{ color: "#111827" }}>
+              You must have some form of qualified health insurance to participate in this program
+            </strong>
+            . Qualified coverage may include employer coverage, spouse/parent plan, ACA exchange
+            (if not receiving a subsidy), TRICARE, or Medicare Part A or C.{" "}
+            <strong style={{ color: "#111827" }}>
+              Medicaid is not considered qualified health insurance.
+            </strong>
+          </div>
+        </>
+      )}
 
       {isOptedOut ? (
         <div style={{ marginTop: 12, fontSize: 13, color: "#991b1b" }}>
@@ -168,9 +225,6 @@ export default function InsuranceAffirmation({
             <div>
               <div style={{ fontWeight: 600, color: "#111827" }}>
                 I have qualified health insurance
-              </div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>
-                No further action is required.
               </div>
             </div>
           </label>

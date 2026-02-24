@@ -42,12 +42,16 @@ export default async function LearnMorePage({ params }: PageProps) {
 
   const { data: employer } = await supabaseServer
     .from("employers")
-    .select("name, support_email")
+    .select("name, support_email, enrollment_type")
     .eq("id", employee.employer_id)
     .maybeSingle();
 
   const greeting = (employee.first_name ?? "").trim() || "there";
   const supportEmail = employer?.support_email || "support@company.com";
+
+  // ✅ NEW (minimal)
+  const enrollmentType = (employer as any)?.enrollment_type ?? "passive";
+  const isActiveEnrollment = enrollmentType === "active";
 
   return (
     <main
@@ -117,12 +121,26 @@ export default async function LearnMorePage({ params }: PageProps) {
               </p>
             </section>
 
+            {/* ✅ ONLY SECTION CHANGED */}
             <section style={{ marginBottom: 18 }}>
               <h3 style={{ marginBottom: 6 }}>Do I need to do anything?</h3>
-              <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
-                No action is required if you wish to continue participating.
-                Simply return to your savings page and click confirm and close. You may also opt out if you wish before the deadline shown on your notice.
-              </p>
+
+              {isActiveEnrollment ? (
+                <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
+                  <strong style={{ color: "#111827" }}>Yes.</strong> Please return to your notice and complete the required steps:
+                  <br />
+                  1) Confirm your health coverage status
+                  <br />
+                  2) Choose <strong>Opt In</strong> or <strong>Opt Out</strong>
+                  <br />
+                  Then click <strong>Confirm &amp; Close</strong> to record your election. You may make changes before the deadline shown on your notice.
+                </p>
+              ) : (
+                <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
+                  No action is required if you wish to continue participating.
+                  Simply return to your savings page and click confirm and close. You may also opt out if you wish before the deadline shown on your notice.
+                </p>
+              )}
             </section>
 
             <section style={{ marginBottom: 18 }}>
@@ -131,8 +149,6 @@ export default async function LearnMorePage({ params }: PageProps) {
               </h3>
               <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
                 No, this program operates alongside your current health benefits and is intended to enhance your families overall wellness and financial well being.
-
-
               </p>
             </section>
 
@@ -224,7 +240,6 @@ export default async function LearnMorePage({ params }: PageProps) {
 
                 <div style={{ height: 1, background: "#e5e7eb" }} />
 
-                {/* ✅ Client component */}
                 <TermsDetails token={token} supportEmail={supportEmail} />
               </div>
 

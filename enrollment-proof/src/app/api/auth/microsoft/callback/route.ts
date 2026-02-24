@@ -234,12 +234,21 @@ export async function GET(req: Request) {
     // ----------------------------
     if (flow === "ms_employer") {
       const hrUserId = await getHrUserIdFromSession(req);
-      if (!hrUserId) {
-        // If HR isn't logged in, send them to login but keep context
-        const to = new URL("/login", url.origin);
-        to.searchParams.set("error", "hr_session_required");
-        return NextResponse.redirect(to);
-      }
+     if (!hrUserId) {
+  const to = new URL(returnTo, url.origin);
+  to.searchParams.set("ms_sender_status", "pending");
+  to.searchParams.set("ms_error", "hr_session_required");
+  to.searchParams.set(
+    "ms_error_description",
+    "Your Flow session cookie was not available during Microsoft connect. This is usually caused by a domain mismatch (www vs non-www or a different redirect URL)."
+  );
+
+  const res = NextResponse.redirect(to);
+  clearCookie(res, "rrs_oauth_return_to");
+  clearCookie(res, "rrs_oauth_flow");
+  clearCookie(res, "rrs_oauth_employer_id");
+  return res;
+}
       if (!employerId) {
         const to = new URL(returnTo, url.origin);
         to.searchParams.set("ms_sender_status", "pending");
