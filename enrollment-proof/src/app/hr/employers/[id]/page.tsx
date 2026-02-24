@@ -14,6 +14,10 @@ type PageProps = {
   searchParams?: Promise<{
     gmail_sender_status?: string;
     gmail_sender_email?: string;
+    ms_sender_status?: string;
+    ms_sender_email?: string;
+    ms_error?: string;
+    ms_error_description?: string;
   }>;
 };
 
@@ -32,7 +36,16 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div style={{ ...cardStyle, padding: 14, minWidth: 170 }}>
       <div style={{ ...subtleText, fontSize: 12, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 900, color: "#111827", letterSpacing: -0.3 }}>{value}</div>
+      <div
+        style={{
+          fontSize: 26,
+          fontWeight: 900,
+          color: "#111827",
+          letterSpacing: -0.3,
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -62,7 +75,7 @@ function EmailStatusPill({
           fontSize: 12,
           whiteSpace: "nowrap",
         }}
-        title={email ? `Pending approval: ${email}` : "Pending approval"}
+        title={title || (email ? `Pending approval: ${email}` : "Pending approval")}
       >
         <span style={{ width: 8, height: 8, borderRadius: 999, background: "#f59e0b" }} />
         Pending approval
@@ -138,8 +151,21 @@ function EmailStatusPill({
 export default async function HrEmployerDashboard({ params, searchParams }: PageProps) {
   const { id: employerId } = await params;
   const sp = (await searchParams) || {};
+
+  // ---- Sender status/email from query params (Gmail OR Microsoft) ----
   const gmailSenderStatus = String(sp.gmail_sender_status || "").toLowerCase();
   const gmailSenderEmail = sp.gmail_sender_email ? String(sp.gmail_sender_email) : null;
+
+  const msSenderStatus = String(sp.ms_sender_status || "").toLowerCase();
+  const msSenderEmail = sp.ms_sender_email ? String(sp.ms_sender_email) : null;
+
+  // Prefer gmail params if present, otherwise fall back to microsoft params
+  const senderStatus = gmailSenderStatus || msSenderStatus;
+  const senderEmail = gmailSenderEmail || msSenderEmail;
+
+  // Microsoft error context (optional, used for pending tooltip)
+  const msError = sp.ms_error ? String(sp.ms_error) : null;
+  const msErrorDescription = sp.ms_error_description ? String(sp.ms_error_description) : null;
 
   // ✅ HR session
   const cookieStore = await cookies();
@@ -175,7 +201,9 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
         <div style={{ ...cardStyle, padding: 18 }}>
           <h1 style={{ margin: 0 }}>Employer not found</h1>
-          <p style={{ marginTop: 8, marginBottom: 0, ...subtleText }}>You don’t have access to this employer.</p>
+          <p style={{ marginTop: 8, marginBottom: 0, ...subtleText }}>
+            You don’t have access to this employer.
+          </p>
         </div>
       </main>
     );
@@ -199,7 +227,9 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
         <div style={{ ...cardStyle, padding: 18 }}>
           <h1 style={{ margin: 0 }}>Employer not found</h1>
-          <p style={{ marginTop: 8, marginBottom: 0, ...subtleText }}>Please return and select a valid employer.</p>
+          <p style={{ marginTop: 8, marginBottom: 0, ...subtleText }}>
+            Please return and select a valid employer.
+          </p>
         </div>
       </main>
     );
@@ -242,19 +272,40 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
 
   // ✅ Determine pill status using same rules as sending (HR-only sender per employer per HR user)
-const { connectedEmail, reason: connectedEmailReason } = await getConnectedEmail({
-  mode: "hr",
-  employerId: employerId,
-});
+  const { connectedEmail, reason: connectedEmailReason } = await getConnectedEmail({
+    mode: "hr",
+    employerId: employerId,
+  });
 
-const pillStatus: "connected" | "pending" | "none" =
-  gmailSenderStatus === "pending" ? "pending" : connectedEmail ? "connected" : "none";
+  const pillStatus: "connected" | "pending" | "none" =
+    senderStatus === "pending" ? "pending" : connectedEmail ? "connected" : "none";
 
-const pillEmail = gmailSenderStatus === "pending" ? gmailSenderEmail : connectedEmail;
+  const pillEmail = senderStatus === "pending" ? senderEmail : connectedEmail;
 
-// Optional: if it’s "none", show reason on hover for instant debugging
-const pillTitle =
-  pillStatus === "none" ? (connectedEmailReason || "No sender found") : undefined;
+  // Tooltip copy (NONE + PENDING)
+  let pillTitle: string | undefined;
+
+  if (pillStatus === "none") {
+    pillTitle = connectedEmailReason || "No sender found";
+  }
+
+  if (pillStatus === "pending") {
+    // Default: Microsoft-side admin approval (NOT Flow admin)
+    pillTitle =
+      "Pending Microsoft 365 (Entra) admin approval. Your IT admin must approve email access for Flow.";
+
+    if (msError === "access_denied") {
+      pillTitle =
+        "Permission not granted. You returned without approving Microsoft email access for Flow.";
+    } else if (msError === "interaction_required") {
+      pillTitle =
+        "Pending Microsoft 365 (Entra) admin approval. Your IT admin must approve email access for Flow.";
+    } else if (msError) {
+      pillTitle =
+        "Pending Microsoft 365 (Entra) admin approval. " +
+        (msErrorDescription || "Your IT admin must approve email access for Flow.");
+    }
+  }
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -276,11 +327,7 @@ const pillTitle =
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <EmailStatusPill status={pillStatus} email={pillEmail} title={pillTitle} />
 
-          <ConnectEmailMenu
-  employerId={employerId}
-  returnTo={`/hr/employers/${employerId}`}
-  variant="light"
-/>
+          <ConnectEmailMenu employerId={employerId} returnTo={`/hr/employers/${employerId}`} variant="light" />
 
           <a href={`/hr/employers/${employerId}/compliance`} style={buttonStyle} title="(Admin route for now)">
             Compliance
@@ -291,7 +338,9 @@ const pillTitle =
       {/* Header */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginBottom: 12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 38, letterSpacing: -0.6, color: "#111827" }}>{employer.name}</h1>
+          <h1 style={{ margin: 0, fontSize: 38, letterSpacing: -0.6, color: "#111827" }}>
+            {employer.name}
+          </h1>
 
           <div style={{ ...subtleText, fontSize: 13, marginTop: 10, lineHeight: 1.6 }}>
             <span style={{ fontWeight: 800, color: "#111827" }}>Effective:</span> {fmtDate(employer.effective_date)}

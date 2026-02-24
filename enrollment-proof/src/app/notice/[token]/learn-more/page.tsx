@@ -104,7 +104,7 @@ export default async function LearnMorePage({ params }: PageProps) {
               <h3 style={{ marginTop: 0, marginBottom: 6 }}>What is this?</h3>
               <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
                 Your employer is implementing a payroll-based benefits program
-                designed to reduce taxable income while providing access to
+                designed to reduce taxable income while providing access for you and your family to
                 additional preventive care benefits.
               </p>
             </section>
@@ -113,7 +113,7 @@ export default async function LearnMorePage({ params }: PageProps) {
               <h3 style={{ marginBottom: 6 }}>How does it work?</h3>
               <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
                 Eligible employees may see an increase in take-home pay because
-                a portion of payroll is treated differently for tax purposes.
+                a portion of their paycheck is treated differently for tax purposes. (See Paycheck Reimbursement Example below.)
               </p>
             </section>
 
@@ -121,7 +121,7 @@ export default async function LearnMorePage({ params }: PageProps) {
               <h3 style={{ marginBottom: 6 }}>Do I need to do anything?</h3>
               <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
                 No action is required if you wish to continue participating.
-                You may opt out before the deadline shown on your notice.
+                Simply return to your savings page and click confirm and close. You may also opt out if you wish before the deadline shown on your notice.
               </p>
             </section>
 
@@ -130,8 +130,9 @@ export default async function LearnMorePage({ params }: PageProps) {
                 Will this affect my existing benefits?
               </h3>
               <p style={{ margin: 0, color: "#4b5563", lineHeight: 1.6 }}>
-                This program operates alongside your current benefits and is
-                intended to enhance employee value and wellness.
+                No, this program operates alongside your current health benefits and is intended to enhance your families overall wellness and financial well being.
+
+
               </p>
             </section>
 

@@ -48,13 +48,14 @@ export default function ConnectEmailMenu({
     fontSize: 13,
   };
 
-  const gmailHref = `/api/auth/google/gmail-connect?returnTo=${encodeURIComponent(returnTo)}&employerId=${encodeURIComponent(
-    employerId
-  )}`;
+  const gmailHref = `/api/auth/google/gmail-connect?returnTo=${encodeURIComponent(
+    returnTo
+  )}&employerId=${encodeURIComponent(employerId)}`;
 
-  const msHref = `/api/auth/microsoft/login?flow=ms_employer&returnTo=${encodeURIComponent(returnTo)}&employerId=${encodeURIComponent(
-    employerId
-  )}`;
+  // ✅ FIX: Microsoft "connect email" must use /connect (not /login)
+  const msHref = `/api/auth/microsoft/connect?returnTo=${encodeURIComponent(
+    returnTo
+  )}&employerId=${encodeURIComponent(employerId)}`;
 
   return (
     <div ref={ref} style={{ position: "relative", display: "inline-block" }}>

@@ -140,7 +140,10 @@ export default function InsuranceAffirmation({
       </div>
 
       <div style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.5 }}>
-        Qualified coverage may include employer coverage, spouse/parent plan, ACA
+        <strong style={{ color: "#111827" }}>
+          You must have some form of qualified health insurance to participate in this program
+        </strong>
+      . Qualified coverage may include employer coverage, spouse/parent plan, ACA
         exchange (if not receiving a subsidy), TRICARE, or Medicare Part A or C.{" "}
         <strong style={{ color: "#111827" }}>
           Medicaid is not considered qualified health insurance.
