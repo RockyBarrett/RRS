@@ -1,3 +1,5 @@
+// /src/app/api/admin/send-requests/[requestId]/process/route.ts
+
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
@@ -23,7 +25,9 @@ async function refreshAccessToken(refreshToken: string) {
   });
 
   const json = await res.json().catch(() => ({} as any));
-  if (!res.ok || !json.access_token) throw new Error(json?.error_description || "Failed to refresh access token");
+  if (!res.ok || !json.access_token) {
+    throw new Error(json?.error_description || "Failed to refresh access token");
+  }
 
   return {
     access_token: String(json.access_token),
@@ -42,7 +46,115 @@ function fmtDateNice(dateStr: string | null | undefined) {
   if (!dateStr) return "";
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return String(dateStr);
-  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
+}
+
+// very light safety: strip script tags (internal admin tool, but still)
+function stripScripts(html: string) {
+  return String(html || "").replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    ""
+  );
+}
+
+function escapeHtml(s: string) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function buildHtmlFromText(bodyText: string) {
+  const lines = String(bodyText || "").split("\n");
+  const blocks: string[] = [];
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (buffer.length) {
+      blocks.push(
+        `<p style="margin:0 0 12px 0; line-height:1.6;">${escapeHtml(
+          buffer.join(" ")
+        )}</p>`
+      );
+      buffer = [];
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      blocks.push(`<div style="height:10px;"></div>`);
+      continue;
+    }
+    buffer.push(line);
+  }
+  flush();
+
+  return blocks.join("");
+}
+
+function buildHtmlWrapper({
+  subject,
+  innerHtml,
+  noticeLink,
+  supportEmail,
+}: {
+  subject: string;
+  innerHtml: string; // already-rendered HTML (scripts stripped)
+  noticeLink: string;
+  supportEmail: string;
+}) {
+  const safeSubject = escapeHtml(subject || "");
+  const safeSupport = escapeHtml(supportEmail || "");
+  const safeLink = escapeHtml(noticeLink || "");
+
+  return `
+  <div style="background:#f5f7fa; padding:28px 12px;">
+    <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+      <div style="padding:18px 20px; border-bottom:1px solid #e5e7eb; font-family:Arial, sans-serif;">
+        <div style="font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:#6b7280;">
+          Benefits Notice
+        </div>
+        <div style="margin-top:6px; font-size:18px; font-weight:700; color:#111827;">
+          ${safeSubject}
+        </div>
+      </div>
+
+      <div style="padding:18px 20px; font-family:Arial, sans-serif; font-size:14px; color:#111827; line-height:1.6;">
+        ${innerHtml}
+
+        <div style="margin:18px 0 10px 0; text-align:center;">
+          <a href="${safeLink}"
+             style="display:inline-block; background:#355A7C; color:#ffffff; text-decoration:none;
+                    padding:12px 18px; border-radius:10px; font-weight:700;">
+            Review Notice
+          </a>
+        </div>
+
+        <div style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.5;">
+          If the button doesn’t work, copy and paste this link into your browser:
+          <div style="margin-top:6px; color:#355A7C; word-break:break-all;">
+            ${safeLink}
+          </div>
+        </div>
+
+        ${
+          safeSupport
+            ? `<div style="margin-top:14px; font-size:12px; color:#6b7280;">
+                 Questions? Contact <strong style="color:#111827;">${safeSupport}</strong>
+               </div>`
+            : ""
+        }
+      </div>
+    </div>
+  </div>
+  `.trim();
 }
 
 async function sendGmail({
@@ -50,35 +162,77 @@ async function sendGmail({
   to,
   subject,
   text,
+  html,
   accessToken,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
+  html?: string;
   accessToken: string;
 }) {
-  const raw = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    ``,
-    text,
-  ].join("\r\n");
+  const safeSubject = (subject || "").replace(/\r?\n/g, " ").trim();
 
-  const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-    body: JSON.stringify({ raw: b64url(raw) }),
-  });
+  let raw = "";
+
+  if (html) {
+    const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
+
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: 7bit`,
+      ``,
+      text || "",
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: 7bit`,
+      ``,
+      html,
+      ``,
+      `--${boundary}--`,
+      ``,
+    ].join("\r\n");
+  } else {
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      text || "",
+    ].join("\r\n");
+  }
+
+  const sendRes = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ raw: b64url(raw) }),
+    }
+  );
 
   const sendJson = await sendRes.json().catch(() => ({} as any));
   if (!sendRes.ok) throw new Error(sendJson?.error?.message || "Gmail send failed");
   return sendJson;
 }
 
-export async function POST(req: Request, ctx: { params: Promise<{ requestId: string }> }) {
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ requestId: string }> }
+) {
   // ✅ optional security key
   const key = req.headers.get("x-admin-key") || "";
   const required = process.env.ADMIN_PROCESS_KEY || "";
@@ -95,19 +249,29 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
     .eq("id", requestId)
     .maybeSingle();
 
-  if (rErr || !r) return Response.json({ error: rErr?.message || "Request not found" }, { status: 404 });
+  if (rErr || !r) {
+    return Response.json(
+      { error: rErr?.message || "Request not found" },
+      { status: 404 }
+    );
+  }
 
   if (String((r as any).status) === "processing") {
     return Response.json({ error: "Request already processing" }, { status: 409 });
   }
 
   // Mark processing
-  await supabaseServer.from("admin_send_requests").update({ status: "processing", error: null }).eq("id", requestId);
+  await supabaseServer
+    .from("admin_send_requests")
+    .update({ status: "processing", error: null })
+    .eq("id", requestId);
 
   try {
     const employerId = String((r as any).employer_id);
     const templateId = String((r as any).template_id);
-    const employeeIds = Array.isArray((r as any).employee_ids) ? (r as any).employee_ids : [];
+    const employeeIds = Array.isArray((r as any).employee_ids)
+      ? (r as any).employee_ids
+      : [];
 
     // Employer
     const { data: employer, error: empErr } = await supabaseServer
@@ -115,16 +279,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
       .select("id, name, support_email, effective_date, opt_out_deadline")
       .eq("id", employerId)
       .maybeSingle();
+
     if (empErr || !employer) throw new Error("Employer not found");
 
-    // Template
+    // ✅ Template (includes body_text/body_html)
     const { data: tmpl, error: tmplErr } = await supabaseServer
       .from("email_templates")
-      .select("id, subject, body, is_active")
+      .select("id, subject, body, body_text, body_html, is_active")
       .eq("id", templateId)
       .maybeSingle();
+
     if (tmplErr || !tmpl) throw new Error("Template not found");
     if ((tmpl as any).is_active === false) throw new Error("Template archived");
+
+    // Choose channels (text is canonical)
+    const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
+    const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
 
     // Admin system sender
     const adminSender = (process.env.ADMIN_SENDER_EMAIL || "").trim().toLowerCase();
@@ -146,6 +316,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
 
     let accessToken = String((acct as any).access_token || "");
     const expiresAtMs = new Date(String((acct as any).expires_at || "")).getTime();
+
     if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
       const refreshed = await refreshAccessToken(refreshToken);
       accessToken = refreshed.access_token;
@@ -180,10 +351,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
       const optedOut = !!(e as any).opted_out_at;
       const token = String((e as any).token || "").trim();
 
-      if (!to.includes("@")) { failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" }); continue; }
-      if (!token) { failed.push({ employee_id: (e as any).id, error: "Missing employee token" }); continue; }
-      if (!eligible) { failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" }); continue; }
-      if (optedOut) { failed.push({ employee_id: (e as any).id, error: "Employee opted out" }); continue; }
+      if (!to.includes("@")) {
+        failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" });
+        continue;
+      }
+      if (!token) {
+        failed.push({ employee_id: (e as any).id, error: "Missing employee token" });
+        continue;
+      }
+      if (!eligible) {
+        failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" });
+        continue;
+      }
+      if (optedOut) {
+        failed.push({ employee_id: (e as any).id, error: "Employee opted out" });
+        continue;
+      }
 
       const vars: Record<string, string> = {
         "employee.first_name": String((e as any).first_name || ""),
@@ -200,15 +383,40 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
         "links.learn_more": `${baseUrl}/notice/${token}/learn-more`,
       };
 
-      const subject = renderTemplate(String((tmpl as any).subject || ""), vars);
-      const text = renderTemplate(String((tmpl as any).body || ""), vars);
+      const subject = renderTemplate(String((tmpl as any).subject || ""), vars) || "Benefits Notice";
+      const text = renderTemplate(bodyTextTemplate, vars) || "";
+
+      const noticeLink = String(vars["links.notice"] || "");
+      const supportEmail = String(vars["employer.support_email"] || "");
+
+      // ✅ Always send an HTML version so the button can appear.
+      // If body_html exists, it keeps bold/colors/etc and gets wrapped.
+      // If it doesn't, we convert text -> HTML and still wrap.
+      let html = "";
+      if (bodyHtmlTemplate.trim().length) {
+        const inner = stripScripts(renderTemplate(bodyHtmlTemplate, vars));
+        html = buildHtmlWrapper({
+          subject,
+          innerHtml: inner,
+          noticeLink,
+          supportEmail,
+        });
+      } else {
+        html = buildHtmlWrapper({
+          subject,
+          innerHtml: buildHtmlFromText(text),
+          noticeLink,
+          supportEmail,
+        });
+      }
 
       try {
         await sendGmail({
           from: adminSender,
           to,
-          subject: subject || "Benefits Notice",
-          text: text || "",
+          subject,
+          text,
+          html,
           accessToken,
         });
 
@@ -261,6 +469,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ requestId: str
       })
       .eq("id", requestId);
 
-    return Response.json({ error: err?.message || "Failed to process request" }, { status: 500 });
+    return Response.json(
+      { error: err?.message || "Failed to process request" },
+      { status: 500 }
+    );
   }
 }

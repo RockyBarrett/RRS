@@ -23,7 +23,9 @@ function getCookie(req: Request, name: string) {
   return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
 }
 
-async function getCaller(req: Request): Promise<
+async function getCaller(
+  req: Request
+): Promise<
   | { kind: "admin"; adminUserId: string }
   | { kind: "hr"; hrUserId: string }
   | null
@@ -38,7 +40,9 @@ async function getCaller(req: Request): Promise<
 
     if (!error && data?.admin_user_id) {
       const exp = new Date(String((data as any).expires_at || "")).getTime();
-      if (!exp || Date.now() < exp) return { kind: "admin", adminUserId: String((data as any).admin_user_id) };
+      if (!exp || Date.now() < exp) {
+        return { kind: "admin", adminUserId: String((data as any).admin_user_id) };
+      }
     }
   }
 
@@ -52,7 +56,9 @@ async function getCaller(req: Request): Promise<
 
     if (!error && data?.hr_user_id) {
       const exp = new Date(String((data as any).expires_at || "")).getTime();
-      if (!exp || Date.now() < exp) return { kind: "hr", hrUserId: String((data as any).hr_user_id) };
+      if (!exp || Date.now() < exp) {
+        return { kind: "hr", hrUserId: String((data as any).hr_user_id) };
+      }
     }
   }
 
@@ -97,27 +103,216 @@ function fmtDateNice(dateStr: string | null | undefined) {
   return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(d);
 }
 
+/* ----------------------------
+   HTML email helpers (legacy fallback)
+----------------------------- */
+
+function escapeHtml(s: string) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function stripScripts(html: string) {
+  return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+}
+
+function buildHtmlEmail({
+  subject,
+  bodyText,
+  noticeLink,
+  supportEmail,
+}: {
+  subject: string;
+  bodyText: string;
+  noticeLink: string;
+  supportEmail: string;
+}) {
+  const safeSubject = escapeHtml(subject || "");
+  const safeSupport = escapeHtml(supportEmail || "");
+  const safeLink = escapeHtml(noticeLink || "");
+
+  const lines = String(bodyText || "").split("\n");
+  const blocks: string[] = [];
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (buffer.length) {
+      blocks.push(`<p style="margin:0 0 12px 0; line-height:1.6;">${escapeHtml(buffer.join(" "))}</p>`);
+      buffer = [];
+    }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      flush();
+      blocks.push(`<div style="height:10px;"></div>`);
+      continue;
+    }
+    buffer.push(line);
+  }
+  flush();
+
+  const content = blocks.join("");
+
+  return `
+  <div style="background:#f5f7fa; padding:28px 12px;">
+    <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+      <div style="padding:18px 20px; border-bottom:1px solid #e5e7eb; font-family:Arial, sans-serif;">
+        <div style="font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:#6b7280;">
+          Benefits Notice
+        </div>
+        <div style="margin-top:6px; font-size:18px; font-weight:700; color:#111827;">
+          ${safeSubject}
+        </div>
+      </div>
+
+      <div style="padding:18px 20px; font-family:Arial, sans-serif; font-size:14px; color:#111827;">
+        ${content}
+
+        <div style="margin:18px 0 10px 0; text-align:center;">
+          <a href="${safeLink}"
+             style="display:inline-block; background:#355A7C; color:#ffffff; text-decoration:none;
+                    padding:12px 18px; border-radius:10px; font-weight:700;">
+            Review Notice
+          </a>
+        </div>
+
+        <div style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.5;">
+          If the button doesn’t work, copy and paste this link into your browser:
+          <div style="margin-top:6px; color:#355A7C; word-break:break-all;">
+            ${safeLink}
+          </div>
+        </div>
+
+        ${
+          safeSupport
+            ? `<div style="margin-top:14px; font-size:12px; color:#6b7280;">
+                 Questions? Contact <strong style="color:#111827;">${safeSupport}</strong>
+               </div>`
+            : ""
+        }
+      </div>
+    </div>
+  </div>
+  `.trim();
+}
+
+function buildHtmlWrapper({
+  subject,
+  innerHtml,
+  noticeLink,
+  supportEmail,
+}: {
+  subject: string;
+  innerHtml: string;     // already-rendered HTML (scripts stripped)
+  noticeLink: string;
+  supportEmail: string;
+}) {
+  const safeSubject = escapeHtml(subject || "");
+  const safeSupport = escapeHtml(supportEmail || "");
+  const safeLink = escapeHtml(noticeLink || "");
+
+  return `
+  <div style="background:#f5f7fa; padding:28px 12px;">
+    <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+      <div style="padding:18px 20px; border-bottom:1px solid #e5e7eb; font-family:Arial, sans-serif;">
+        <div style="font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:#6b7280;">
+          Benefits Notice
+        </div>
+        <div style="margin-top:6px; font-size:18px; font-weight:700; color:#111827;">
+          ${safeSubject}
+        </div>
+      </div>
+
+      <div style="padding:18px 20px; font-family:Arial, sans-serif; font-size:14px; color:#111827; line-height:1.6;">
+        ${innerHtml}
+
+        <div style="margin:18px 0 10px 0; text-align:center;">
+          <a href="${safeLink}"
+             style="display:inline-block; background:#355A7C; color:#ffffff; text-decoration:none;
+                    padding:12px 18px; border-radius:10px; font-weight:700;">
+            Review Notice
+          </a>
+        </div>
+
+        <div style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.5;">
+          If the button doesn’t work, copy and paste this link into your browser:
+          <div style="margin-top:6px; color:#355A7C; word-break:break-all;">
+            ${safeLink}
+          </div>
+        </div>
+
+        ${
+          safeSupport
+            ? `<div style="margin-top:14px; font-size:12px; color:#6b7280;">
+                 Questions? Contact <strong style="color:#111827;">${safeSupport}</strong>
+               </div>`
+            : ""
+        }
+      </div>
+    </div>
+  </div>
+  `.trim();
+}
+
 async function sendGmail({
   from,
   to,
   subject,
   text,
+  html,
   accessToken,
 }: {
   from: string;
   to: string;
   subject: string;
   text: string;
+  html?: string;
   accessToken: string;
 }) {
-  const raw = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    ``,
-    text,
-  ].join("\r\n");
+  const safeSubject = (subject || "").replace(/\r?\n/g, " ").trim();
+
+  let raw = "";
+
+  if (html) {
+    const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
+
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: 7bit`,
+      ``,
+      text || "",
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: 7bit`,
+      ``,
+      html,
+      ``,
+      `--${boundary}--`,
+      ``,
+    ].join("\r\n");
+  } else {
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      text || "",
+    ].join("\r\n");
+  }
 
   const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -137,7 +332,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const { id: employerId } = await ctx.params;
 
   let body: any = {};
-  try { body = await req.json(); } catch {}
+  try {
+    body = await req.json();
+  } catch {}
 
   const employee_id = body?.employee_id;
   const employee_ids = Array.isArray(body?.employee_ids) ? body.employee_ids : null;
@@ -161,16 +358,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (empErr || !employer) return Response.json({ error: "Employer not found" }, { status: 404 });
 
+  // ✅ IMPORTANT: include body_text/body_html so rich formatting can send
   const { data: tmpl, error: tmplErr } = await supabaseServer
     .from("email_templates")
-    .select("id, subject, body, is_active")
+    .select("id, subject, body, body_text, body_html, is_active")
     .eq("id", template_id)
     .maybeSingle();
 
   if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
   if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
 
-  // ✅ Sender selection: same hard rules as compliance
+  // ✅ Sender selection
   let acct: any = null;
 
   if (caller.kind === "admin") {
@@ -184,7 +382,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       .eq("status", "approved")
       .maybeSingle();
 
-    if (data && (data as any).connected_by_admin_user_id && String((data as any).connected_by_admin_user_id) !== caller.adminUserId) {
+    if (
+      data &&
+      (data as any).connected_by_admin_user_id &&
+      String((data as any).connected_by_admin_user_id) !== caller.adminUserId
+    ) {
       return Response.json({ error: "Admin sender not owned by this admin user." }, { status: 403 });
     }
 
@@ -203,9 +405,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (!acct) {
     return Response.json(
-      { error: caller.kind === "admin"
-          ? "Admin sender not connected/approved. Connect ADMIN_SENDER_EMAIL first."
-          : "No approved sender connected for this employer by this HR user."
+      {
+        error:
+          caller.kind === "admin"
+            ? "Admin sender not connected/approved. Connect ADMIN_SENDER_EMAIL first."
+            : "No approved sender connected for this employer by this HR user.",
       },
       { status: 400 }
     );
@@ -223,18 +427,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     accessToken = refreshed.access_token;
 
     const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-    await supabaseServer
+
+    const q = supabaseServer
       .from("gmail_accounts")
       .update({ access_token: accessToken, expires_at: newExpiresAt })
-      const q = supabaseServer
-  .from("gmail_accounts")
-  .update({ access_token: accessToken, expires_at: newExpiresAt })
-  .eq("user_email", fromEmail);
+      .eq("user_email", fromEmail);
 
-if (caller.kind === "admin") q.is("employer_id", null);
-else q.eq("employer_id", employerId);
+    if (caller.kind === "admin") q.is("employer_id", null);
+    else q.eq("employer_id", employerId);
 
-await q;
+    await q;
   }
 
   // Employees
@@ -252,6 +454,10 @@ await q;
   let sent = 0;
   const failed: Array<{ employee_id: string; error: string }> = [];
 
+  // ✅ pick template channels
+  const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
+  const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
+
   for (const e of employees ?? []) {
     attempted++;
 
@@ -260,10 +466,22 @@ await q;
     const optedOut = !!(e as any).opted_out_at;
     const token = String((e as any).token || "").trim();
 
-    if (!to.includes("@")) { failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" }); continue; }
-    if (!token) { failed.push({ employee_id: (e as any).id, error: "Missing employee token" }); continue; }
-    if (!eligible) { failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" }); continue; }
-    if (optedOut) { failed.push({ employee_id: (e as any).id, error: "Employee opted out" }); continue; }
+    if (!to.includes("@")) {
+      failed.push({ employee_id: (e as any).id, error: "Missing/invalid employee email" });
+      continue;
+    }
+    if (!token) {
+      failed.push({ employee_id: (e as any).id, error: "Missing employee token" });
+      continue;
+    }
+    if (!eligible) {
+      failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" });
+      continue;
+    }
+    if (optedOut) {
+      failed.push({ employee_id: (e as any).id, error: "Employee opted out" });
+      continue;
+    }
 
     const vars: Record<string, string> = {
       "employee.first_name": String((e as any).first_name || ""),
@@ -281,10 +499,28 @@ await q;
     };
 
     const renderedSubject = renderTemplate(String((tmpl as any).subject || ""), vars);
-    const renderedText = renderTemplate(String((tmpl as any).body || ""), vars);
+
+    // ✅ TEXT: use body_text (or legacy body)
+    const renderedText = renderTemplate(bodyTextTemplate, vars);
 
     const finalSubject = subject_override ? renderTemplate(subject_override, vars) : renderedSubject;
     const finalText = body_override ? renderTemplate(body_override, vars) : renderedText;
+
+    // ✅ HTML: if template has body_html, use it (rich formatting survives)
+    // Otherwise fallback to your wrapper generated from text.
+    const innerHtml = bodyHtmlTemplate.trim().length
+  ? stripScripts(renderTemplate(bodyHtmlTemplate, vars))
+  : (() => {
+      const escaped = escapeHtml(finalText || "").replace(/\n/g, "<br/>");
+      return `<div style="white-space:normal;">${escaped}</div>`;
+    })();
+
+const html = buildHtmlWrapper({
+  subject: finalSubject || "Benefits Notice",
+  innerHtml,
+  noticeLink: String(vars["links.notice"] || ""),
+  supportEmail: String(vars["employer.support_email"] || ""),
+});
 
     try {
       await sendGmail({
@@ -292,6 +528,7 @@ await q;
         to,
         subject: finalSubject || "Benefits Notice",
         text: finalText || "",
+        html,
         accessToken,
       });
 

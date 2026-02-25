@@ -4,15 +4,15 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buttonStyle, buttonPrimaryStyle, subtleText } from "@/app/admin/_ui";
 
 type VarDef = {
-  key: string;          // e.g. "employee.first_name"
-  label: string;        // e.g. "First name"
-  group: string;        // e.g. "Employee"
-  description: string;  // tooltip/popover
-  example: string;      // preview example
+  key: string; // e.g. "employee.first_name"
+  label: string; // e.g. "First name"
+  group: string; // e.g. "Employee"
+  description: string; // tooltip/popover
+  example: string; // preview example
 };
 
 type Props = {
-  value: string;                 // stored template string with {{var}}
+  value: string; // stored template string with {{var}}
   onChange: (next: string) => void;
 
   // Optional: for preview mode
@@ -20,6 +20,10 @@ type Props = {
 
   // Optional: allow custom vars
   variables?: VarDef[];
+
+  // ✅ NEW: HTML (rich) channel (optional wiring)
+  valueHtml?: string;
+  onChangeHtml?: (nextHtml: string) => void;
 };
 
 const DEFAULT_VARS: VarDef[] = [
@@ -97,7 +101,6 @@ function varTokenText(key: string) {
 }
 
 function tokenizeTemplate(input: string) {
-  // Splits into text + {{var}} tokens
   const re = /{{\s*([a-zA-Z0-9_.-]+)\s*}}/g;
   const out: Array<{ type: "text"; value: string } | { type: "var"; key: string }> = [];
 
@@ -166,7 +169,6 @@ function setCaretAfter(node: Node) {
 }
 
 function extractTemplateFromEditor(root: HTMLElement) {
-  // Walk child nodes and reconstruct string with {{var}}
   let out = "";
 
   const walk = (node: Node) => {
@@ -178,40 +180,100 @@ function extractTemplateFromEditor(root: HTMLElement) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
 
-      // our pill
       const key = el.getAttribute("data-var");
       if (key) {
         out += varTokenText(key);
         return;
       }
 
-      // normal element — recurse children
+      if (el.tagName === "BR") {
+        out += "\n";
+        return;
+      }
+
       const children = Array.from(el.childNodes);
       for (const c of children) walk(c);
 
-      // preserve line breaks for div/br paragraphs
-      if (el.tagName === "DIV") out += "\n";
+      if (el.tagName === "DIV" || el.tagName === "P") out += "\n";
       return;
     }
   };
 
-  // Use childNodes rather than innerText to preserve token placements
   const nodes = Array.from(root.childNodes);
   for (const n of nodes) walk(n);
 
-  // Clean up: remove excessive trailing newlines from div parsing
   return out.replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
+// ✅ HTML extract while preserving {{var}} tokens
+function extractHtmlFromEditor(root: HTMLElement) {
+  const clone = root.cloneNode(true) as HTMLElement;
+
+  const pills = Array.from(clone.querySelectorAll("[data-var]")) as HTMLElement[];
+  for (const pill of pills) {
+    const key = pill.getAttribute("data-var") || "";
+    pill.replaceWith(clone.ownerDocument.createTextNode(varTokenText(key)));
+  }
+
+  return clone.innerHTML;
+}
+
+// very light safety: strip script tags (this is an internal admin tool, but still)
+function stripScripts(html: string) {
+  return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+}
+
+function hydrateHtmlIntoEditor(root: HTMLElement, html: string, defsByKey: Map<string, VarDef>) {
+  const doc = root.ownerDocument;
+  root.innerHTML = stripScripts(html || "");
+
+  // Replace any {{var}} occurrences inside TEXT NODES with pill spans
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+
+  let n: Node | null;
+  while ((n = walker.nextNode())) textNodes.push(n as Text);
+
+  const re = /{{\s*([a-zA-Z0-9_.-]+)\s*}}/g;
+
+  for (const tn of textNodes) {
+    const text = tn.nodeValue || "";
+    if (!re.test(text)) continue;
+
+    re.lastIndex = 0;
+
+    const frag = doc.createDocumentFragment();
+    let last = 0;
+    let m: RegExpExecArray | null;
+
+    while ((m = re.exec(text)) !== null) {
+      const start = m.index;
+      const end = re.lastIndex;
+
+      if (start > last) frag.appendChild(doc.createTextNode(text.slice(last, start)));
+
+      const key = normalizeVarKey(m[1]);
+      const def = defsByKey.get(key);
+      frag.appendChild(createVarSpan(doc, def, key));
+
+      last = end;
+    }
+
+    if (last < text.length) frag.appendChild(doc.createTextNode(text.slice(last)));
+
+    tn.parentNode?.replaceChild(frag, tn);
+  }
+
+  if (root.childNodes.length === 0) root.appendChild(doc.createTextNode(""));
+}
+
 function renderTemplateToEditor(root: HTMLElement, template: string, defsByKey: Map<string, VarDef>) {
-  // Build DOM safely (no innerHTML)
   const doc = root.ownerDocument;
   root.innerHTML = "";
 
   const parts = tokenizeTemplate(template || "");
   for (const p of parts) {
     if (p.type === "text") {
-      // Convert \n into <div> lines for nicer editing
       const lines = p.value.split("\n");
       lines.forEach((line, idx) => {
         root.appendChild(doc.createTextNode(line));
@@ -224,7 +286,6 @@ function renderTemplateToEditor(root: HTMLElement, template: string, defsByKey: 
     }
   }
 
-  // If empty, ensure there's a text node so caret can appear
   if (root.childNodes.length === 0) {
     root.appendChild(doc.createTextNode(""));
   }
@@ -239,14 +300,11 @@ function getNodeBeforeCaret(root: HTMLElement): Node | null {
 
   const { startContainer, startOffset } = range;
 
-  // If caret is inside a text node, check char before
   if (startContainer.nodeType === Node.TEXT_NODE) {
-    if (startOffset > 0) return null; // normal backspace within text
-    // at start of text node — look for previous sibling
+    if (startOffset > 0) return null;
     return startContainer.previousSibling;
   }
 
-  // If caret is in element node, look at child before offset
   if (startContainer.nodeType === Node.ELEMENT_NODE) {
     const el = startContainer as Element;
     const idx = startOffset - 1;
@@ -267,7 +325,7 @@ function getNodeAfterCaret(root: HTMLElement): Node | null {
 
   if (startContainer.nodeType === Node.TEXT_NODE) {
     const text = startContainer.textContent || "";
-    if (startOffset < text.length) return null; // normal delete within text
+    if (startOffset < text.length) return null;
     return startContainer.nextSibling;
   }
 
@@ -284,6 +342,8 @@ export default function TemplateEditor({
   onChange,
   previewValues,
   variables,
+  valueHtml,
+  onChangeHtml,
 }: Props) {
   const vars = variables ?? DEFAULT_VARS;
 
@@ -305,6 +365,9 @@ export default function TemplateEditor({
 
   const editorRef = useRef<HTMLDivElement | null>(null);
 
+  // ✅ Keep a live html buffer so preview shows bold immediately even before DB wiring
+  const [liveHtml, setLiveHtml] = useState<string>("");
+
   // Variable popover
   const [pillOpen, setPillOpen] = useState<{
     key: string;
@@ -315,31 +378,48 @@ export default function TemplateEditor({
     example: string;
   } | null>(null);
 
-  // Insert dropdown
   const [menuOpen, setMenuOpen] = useState(false);
-
-  // Preview toggle
   const [preview, setPreview] = useState(false);
 
-  // Render initial content or external updates
   useEffect(() => {
-    const root = editorRef.current;
-    if (!root) return;
+  const root = editorRef.current;
+  if (!root) return;
 
-    // Avoid rerender loops while user is typing:
-    // only re-render if extracted differs from incoming value
-    const current = extractTemplateFromEditor(root);
-    if (current !== (value || "")) {
-      renderTemplateToEditor(root, value || "", defsByKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, defsByKey]);
+  const incomingHtml = (valueHtml || "").trim();
+
+  // Prefer saved HTML (keeps bold/italic/colors on re-open)
+  if (incomingHtml) {
+  const currentHtml = stripScripts(extractHtmlFromEditor(root)).trim();
+  const wantedHtml = stripScripts(incomingHtml).trim();
+
+  if (currentHtml !== wantedHtml) {
+    hydrateHtmlIntoEditor(root, incomingHtml, defsByKey);
+  }
+
+  // ✅ always sync liveHtml (even if no changes needed)
+  setLiveHtml(extractHtmlFromEditor(root));
+  return;
+}
+
+  // Fallback to text rendering
+  const current = extractTemplateFromEditor(root);
+  if (current !== (value || "")) {
+    renderTemplateToEditor(root, value || "", defsByKey);
+    setLiveHtml(extractHtmlFromEditor(root));
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [value, valueHtml, defsByKey]);
 
   function notifyChange() {
     const root = editorRef.current;
     if (!root) return;
-    const next = extractTemplateFromEditor(root);
-    onChange(next);
+
+    const nextText = extractTemplateFromEditor(root);
+    onChange(nextText);
+
+    const nextHtml = extractHtmlFromEditor(root);
+    setLiveHtml(nextHtml);
+    if (onChangeHtml) onChangeHtml(nextHtml);
   }
 
   function insertVariable(key: string) {
@@ -357,7 +437,6 @@ export default function TemplateEditor({
 
     range.insertNode(span);
 
-    // add a trailing space to make typing feel natural
     const space = document.createTextNode(" ");
     span.after(space);
 
@@ -365,15 +444,80 @@ export default function TemplateEditor({
     notifyChange();
   }
 
-  function applyPreview(template: string) {
+  function applyPreviewText(template: string) {
     const map = previewValues ?? {};
-    return template.replace(/{{\s*([a-zA-Z0-9_.-]+)\s*}}/g, (_, k) => {
+    return String(template || "").replace(/{{\s*([a-zA-Z0-9_.-]+)\s*}}/g, (_, k) => {
       const key = normalizeVarKey(k);
       if (map[key] != null) return String(map[key]);
       const def = defsByKey.get(key);
       return def?.example ?? "";
     });
   }
+
+  function applyPreviewHtml(html: string) {
+    const map = previewValues ?? {};
+    const replaced = String(html || "").replace(/{{\s*([a-zA-Z0-9_.-]+)\s*}}/g, (_, k) => {
+      const key = normalizeVarKey(k);
+      if (map[key] != null) return String(map[key]);
+      const def = defsByKey.get(key);
+      return def?.example ?? "";
+    });
+    return stripScripts(replaced);
+  }
+
+  function exec(cmd: string, val?: string) {
+    const root = editorRef.current;
+    if (!root) return;
+    root.focus();
+
+    try {
+      // @ts-ignore
+      document.execCommand(cmd, false, val);
+    } catch {
+      // ignore
+    }
+
+    // allow DOM to update, then extract
+    setTimeout(() => notifyChange(), 0);
+  }
+
+  function doLink() {
+    const url = window.prompt("Paste link URL (https://...):", "https://");
+    if (!url) return;
+    exec("createLink", url);
+  }
+
+  const toolBtn: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+
+  padding: "8px 10px",
+  borderRadius: 12,
+  border: "1px solid #e2e8f0",
+  background: "#ffffff",
+
+  color: "#0f172a",          // ✅ makes labels visible
+  fontWeight: 900,
+  fontSize: 12,
+  lineHeight: 1,
+
+  cursor: "pointer",
+  userSelect: "none",
+};
+
+  const colorDot = (c: string): React.CSSProperties => ({
+    width: 16,
+    height: 16,
+    borderRadius: 999,
+    background: c,
+    border: "1px solid #e2e8f0",
+    display: "inline-block",
+  });
+
+  // Prefer saved HTML if parent provides it; otherwise use liveHtml
+  const htmlForPreview = valueHtml && valueHtml.trim().length ? valueHtml : liveHtml;
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -396,41 +540,35 @@ export default function TemplateEditor({
           </button>
 
           <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              style={{ ...buttonPrimaryStyle, fontWeight: 900 }}
-            >
+            <button onClick={() => setMenuOpen((o) => !o)} style={{ ...buttonPrimaryStyle, fontWeight: 900 }}>
               Insert variable ▾
             </button>
 
             {menuOpen && (
-  <div
-    style={{
-      position: "absolute",
-      right: 0,
-      top: "calc(100% + 8px)",
-      width: 320,
-      maxHeight: 320,
-      overflowY: "auto",
-      overscrollBehavior: "contain",
-      WebkitOverflowScrolling: "touch",
-      background: "#ffffff",
-      border: "1px solid #e2e8f0",
-      borderRadius: 14,
-      boxShadow: "0 18px 40px rgba(15,23,42,0.14)",
-      padding: 10,
-      zIndex: 50,
-    }}
-    onWheelCapture={(e) => {
-      // keep scroll inside dropdown (prevents page scroll)
-      e.stopPropagation();
-    }}
-  >
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  width: 320,
+                  maxHeight: 320,
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 14,
+                  boxShadow: "0 18px 40px rgba(15,23,42,0.14)",
+                  padding: 10,
+                  zIndex: 50,
+                }}
+                onWheelCapture={(e) => {
+                  e.stopPropagation();
+                }}
+              >
                 {grouped.map((g) => (
                   <div key={g.group} style={{ padding: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>
-                      {g.group}
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 900, color: "#0f172a", marginBottom: 6 }}>{g.group}</div>
 
                     <div style={{ display: "grid", gap: 6 }}>
                       {g.items.map((v) => (
@@ -453,9 +591,7 @@ export default function TemplateEditor({
                           title={v.description}
                         >
                           {v.label}
-                          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginTop: 2 }}>
-                            {v.key}
-                          </div>
+                          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginTop: 2 }}>{v.key}</div>
                         </button>
                       ))}
                     </div>
@@ -463,7 +599,8 @@ export default function TemplateEditor({
                 ))}
 
                 <div style={{ marginTop: 8, ...subtleText, fontSize: 12, padding: "0 6px 4px 6px" }}>
-                  Tip: variables are stored like <strong style={{ color: "#0f172a" }}>{`{{employee.first_name}}`}</strong>
+                  Tip: variables are stored like{" "}
+                  <strong style={{ color: "#0f172a" }}>{`{{employee.first_name}}`}</strong>
                 </div>
               </div>
             )}
@@ -471,113 +608,170 @@ export default function TemplateEditor({
         </div>
       </div>
 
-      {/* Editor */}
-<div style={{ position: "relative" }}>
-  {/* EDIT MODE (kept mounted, just hidden) */}
-  <div style={{ display: preview ? "none" : "block" }}>
-    <div
-      ref={editorRef}
-      contentEditable
-      suppressContentEditableWarning
-      spellCheck={false}
-      onInput={() => {
-        setPillOpen(null);
-        notifyChange();
-      }}
-      onClick={(e) => {
-        // If they clicked a variable pill, show popover
-        const target = e.target as HTMLElement;
-        const pill = target.closest?.("[data-var]") as HTMLElement | null;
-        if (!pill) {
-          setPillOpen(null);
-          return;
-        }
+      {/* ✅ NEW: formatting toolbar (hidden in preview) */}
+      {!preview && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button style={toolBtn} onClick={() => exec("bold")} title="Bold">
+  Bold
+</button>
+<button style={toolBtn} onClick={() => exec("italic")} title="Italic">
+  Italic
+</button>
+<button style={toolBtn} onClick={() => exec("underline")} title="Underline">
+  Underline
+</button>
+<button style={toolBtn} onClick={doLink} title="Insert link">
+  Link
+</button>
+<button style={toolBtn} onClick={() => exec("removeFormat")} title="Remove formatting">
+  Clear
+</button>
 
-        const key = pill.getAttribute("data-var") || "";
-        const def = defsByKey.get(normalizeVarKey(key));
-        const r = pill.getBoundingClientRect();
+<div style={{ width: 1, height: 24, background: "#e2e8f0", margin: "0 4px" }} />
 
-        setPillOpen({
-          key,
-          x: Math.min(r.left, window.innerWidth - 340),
-          y: r.bottom + 8,
-          label: def?.label || key,
-          description: def?.description || key,
-          example: def?.example || "",
-        });
-      }}
-      onKeyDown={(e) => {
-        const root = editorRef.current;
-        if (!root) return;
+<div style={{ fontSize: 12, fontWeight: 900, color: "#0f172a" }}>Text color</div>
 
-        // Backspace removes pill if caret is directly after one
-        if (e.key === "Backspace") {
-          const before = getNodeBeforeCaret(root);
-          const el = before && before.nodeType === Node.ELEMENT_NODE ? (before as HTMLElement) : null;
-          if (el?.getAttribute?.("data-var")) {
-            e.preventDefault();
-            el.remove();
-            notifyChange();
-            return;
-          }
-        }
+<button style={toolBtn} onClick={() => exec("foreColor", "#111827")} title="Default">
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <span style={colorDot("#111827")} />
+    Default
+  </span>
+</button>
 
-        // Delete removes pill if caret is directly before one
-        if (e.key === "Delete") {
-          const after = getNodeAfterCaret(root);
-          const el = after && after.nodeType === Node.ELEMENT_NODE ? (after as HTMLElement) : null;
-          if (el?.getAttribute?.("data-var")) {
-            e.preventDefault();
-            el.remove();
-            notifyChange();
-            return;
-          }
-        }
+<button style={toolBtn} onClick={() => exec("foreColor", "#1d4ed8")} title="Blue">
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <span style={colorDot("#1d4ed8")} />
+    Blue
+  </span>
+</button>
 
-        // Escape closes popovers
-        if (e.key === "Escape") {
-          setMenuOpen(false);
-          setPillOpen(null);
-        }
-      }}
-      style={{
-        width: "100%",
-        minHeight: 220,
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid #e2e8f0",
-        background: "#ffffff",
-        boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
-        outline: "none",
-        fontSize: 14,
-        lineHeight: 1.6,
-        color: "#0f172a",
-        whiteSpace: "pre-wrap",
-      }}
-    />
-  </div>
+<button style={toolBtn} onClick={() => exec("foreColor", "#15803d")} title="Green">
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <span style={colorDot("#15803d")} />
+    Green
+  </span>
+</button>
 
-  {/* PREVIEW MODE */}
-  <div style={{ display: preview ? "block" : "none" }}>
-    <div
-      style={{
-        width: "100%",
-        minHeight: 220,
-        padding: 14,
-        borderRadius: 16,
-        border: "1px solid #e2e8f0",
-        background: "#ffffff",
-        boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
-        fontSize: 14,
-        lineHeight: 1.6,
-        color: "#0f172a",
-        whiteSpace: "pre-wrap",
-      }}
-    >
-      {applyPreview(value || "")}
-    </div>
-  </div>
-</div>
+<button style={toolBtn} onClick={() => exec("foreColor", "#b91c1c")} title="Red">
+  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <span style={colorDot("#b91c1c")} />
+    Red
+  </span>
+</button>
+        </div>
+      )}
+
+      {/* Editor / Preview */}
+      <div style={{ position: "relative" }}>
+        {/* EDIT MODE */}
+        <div style={{ display: preview ? "none" : "block" }}>
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            onInput={() => {
+              setPillOpen(null);
+              notifyChange();
+            }}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              const pill = target.closest?.("[data-var]") as HTMLElement | null;
+              if (!pill) {
+                setPillOpen(null);
+                return;
+              }
+
+              const key = pill.getAttribute("data-var") || "";
+              const def = defsByKey.get(normalizeVarKey(key));
+              const r = pill.getBoundingClientRect();
+
+              setPillOpen({
+                key,
+                x: Math.min(r.left, window.innerWidth - 340),
+                y: r.bottom + 8,
+                label: def?.label || key,
+                description: def?.description || key,
+                example: def?.example || "",
+              });
+            }}
+            onKeyDown={(e) => {
+              const root = editorRef.current;
+              if (!root) return;
+
+              if (e.key === "Backspace") {
+                const before = getNodeBeforeCaret(root);
+                const el = before && before.nodeType === Node.ELEMENT_NODE ? (before as HTMLElement) : null;
+                if (el?.getAttribute?.("data-var")) {
+                  e.preventDefault();
+                  el.remove();
+                  notifyChange();
+                  return;
+                }
+              }
+
+              if (e.key === "Delete") {
+                const after = getNodeAfterCaret(root);
+                const el = after && after.nodeType === Node.ELEMENT_NODE ? (after as HTMLElement) : null;
+                if (el?.getAttribute?.("data-var")) {
+                  e.preventDefault();
+                  el.remove();
+                  notifyChange();
+                  return;
+                }
+              }
+
+              if (e.key === "Escape") {
+                setMenuOpen(false);
+                setPillOpen(null);
+              }
+            }}
+            style={{
+              width: "100%",
+              minHeight: 220,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+              outline: "none",
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "#0f172a",
+              whiteSpace: "pre-wrap",
+            }}
+          />
+        </div>
+
+        {/* PREVIEW MODE */}
+        <div style={{ display: preview ? "block" : "none" }}>
+          <div
+            style={{
+              width: "100%",
+              minHeight: 220,
+              padding: 14,
+              borderRadius: 16,
+              border: "1px solid #e2e8f0",
+              background: "#ffffff",
+              boxShadow: "0 8px 20px rgba(15,23,42,0.06)",
+              fontSize: 14,
+              lineHeight: 1.6,
+              color: "#0f172a",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {htmlForPreview && htmlForPreview.trim().length ? (
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: applyPreviewHtml(htmlForPreview),
+                }}
+              />
+            ) : (
+              <div style={{ whiteSpace: "pre-wrap" }}>{applyPreviewText(value || "")}</div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div style={{ ...subtleText, fontSize: 12, lineHeight: 1.5 }}>
         Variables are protected pills. Backspace/Delete removes the whole variable.
@@ -585,14 +779,7 @@ export default function TemplateEditor({
 
       {/* Pill popover */}
       {pillOpen && (
-        <div
-          onClick={() => setPillOpen(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 60,
-          }}
-        >
+        <div onClick={() => setPillOpen(null)} style={{ position: "fixed", inset: 0, zIndex: 60 }}>
           <div
             onClick={(e) => e.stopPropagation()}
             style={{

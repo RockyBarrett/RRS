@@ -16,6 +16,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (body.category !== undefined) patch.category = cleanStr(body.category);
   if (body.subject !== undefined) patch.subject = cleanStr(body.subject);
   if (body.body !== undefined) patch.body = cleanStr(body.body);
+  if (body.body_html !== undefined) patch.body_html = body.body_html == null ? null : String(body.body_html);
   if (body.is_active !== undefined) patch.is_active = !!body.is_active;
 
   if (patch.category && patch.category !== "enrollment" && patch.category !== "compliance") {
@@ -31,7 +32,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     .from("email_templates")
     .update(patch)
     .eq("id", id)
-    .select("id, name, category, subject, body, is_active, created_at, updated_at")
+    .select("id, name, category, subject, body, body_html, is_active, created_at, updated_at")
     .maybeSingle();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

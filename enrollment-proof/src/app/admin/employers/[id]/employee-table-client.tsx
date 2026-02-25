@@ -34,7 +34,9 @@ type TemplateRow = {
   id: string;
   name: string;
   subject: string;
-  body: string;
+
+  body: string; // legacy text
+  body_html?: string | null; // ✅ rich html
 };
 
 type StatusType = "new" | "sent" | "opened" | "acknowledged" | "opted_out";
@@ -162,6 +164,17 @@ function Modal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  React.useEffect(() => {
+    if (!open) return;
+
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -180,16 +193,21 @@ function Modal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        onWheelCapture={(e) => e.stopPropagation()}
         style={{
           width: "100%",
           maxWidth: 820,
+          maxHeight: "85vh",
           background: "#fff",
           borderRadius: 18,
           border: "1px solid #e5e7eb",
           boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
           overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
+        {/* Header */}
         <div
           style={{
             padding: 16,
@@ -198,9 +216,11 @@ function Modal({
             justifyContent: "space-between",
             alignItems: "center",
             gap: 12,
+            flexShrink: 0,
           }}
         >
           <div style={{ fontWeight: 900, color: "#111827" }}>{title}</div>
+
           <button
             onClick={onClose}
             style={{
@@ -215,7 +235,18 @@ function Modal({
             Close
           </button>
         </div>
-        <div style={{ padding: 16 }}>{children}</div>
+
+        {/* Scrollable Content */}
+        <div
+          style={{
+            padding: 16,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+          }}
+          onWheelCapture={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -261,7 +292,8 @@ const [previewEmployeeIds, setPreviewEmployeeIds] = useState<string[]>([]);
 const [previewTemplateId, setPreviewTemplateId] = useState<string>(""); // ✅ new
 const [previewSubject, setPreviewSubject] = useState("");
 const [previewBody, setPreviewBody] = useState("");
-const [previewEditMode, setPreviewEditMode] = useState(true);
+const [previewEditMode, setPreviewEditMode] = useState(false);
+const [previewBodyHtml, setPreviewBodyHtml] = useState<string>("");
 
   // If templates arrive later, set defaults once
   useEffect(() => {
@@ -415,9 +447,19 @@ const [previewEditMode, setPreviewEditMode] = useState(true);
   setPreviewTitle(`Preview: ${t.name} → ${e.email}`);
   setPreviewTo([e.email]);
   setPreviewEmployeeIds([e.id]);
-  setPreviewTemplateId(templateId); // ✅ NEW: remember which template this preview represents
-  setPreviewSubject(applyVars(t.subject, e));
-  setPreviewBody(applyVars(t.body, e));
+  setPreviewTemplateId(templateId);
+
+  // Subject
+  setPreviewSubject(applyVars(t.subject ?? "", e));
+
+  // Text fallback
+  const text = applyVars((t.body ?? "") as string, e);
+  setPreviewBody(text);
+
+  // HTML (rich)
+  const html = applyVars(String(t.body_html ?? ""), e);
+  setPreviewBodyHtml(html);
+
   setPreviewOpen(true);
 }
 
@@ -438,12 +480,16 @@ function openPreviewForBulk() {
   setPreviewTitle(`Preview: ${t.name} → ${eligibleActiveEmployees.length} employee(s)`);
   setPreviewTo(eligibleActiveEmployees.map((x) => x.email));
   setPreviewEmployeeIds(eligibleActiveEmployees.map((x) => x.id));
-  setPreviewTemplateId(bulkTemplateId); // ✅ NEW: bulk preview uses bulk template
-  setPreviewSubject(applyVars(t.subject, sample));
-  setPreviewBody(
-    applyVars(t.body, sample) +
-      `\n\n---\nPreview shown using ${sample.email}. Each employee receives their own personalized version.`
-  );
+  setPreviewTemplateId(bulkTemplateId);
+
+  setPreviewSubject(applyVars(t.subject ?? "", sample));
+
+  const text = applyVars((t.body ?? "") as string, sample) +
+    `\n\n---\nPreview shown using ${sample.email}. Each employee receives their own personalized version.`;
+  setPreviewBody(text);
+
+  const html = applyVars(String(t.body_html ?? ""), sample);
+  setPreviewBodyHtml(html);
 
   setPreviewOpen(true);
 }
@@ -971,11 +1017,19 @@ function openPreviewForBulk() {
       lineHeight: 1.7,
       fontFamily:
         "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto",
-      whiteSpace: "pre-wrap",
       boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
     }}
   >
-    {previewBody || "—"}
+    {previewBodyHtml && previewBodyHtml.trim().length ? (
+      <div
+  style={{ lineHeight: 1.7 }}
+  dangerouslySetInnerHTML={{ __html: previewBodyHtml }}
+/>
+    ) : (
+      <div style={{ whiteSpace: "pre-wrap" }}>
+        {previewBody || "—"}
+      </div>
+    )}
   </div>
 )}
 </div>

@@ -9,7 +9,7 @@ function cleanStr(v: any) {
 export async function GET() {
   const { data, error } = await supabaseServer
     .from("email_templates")
-    .select("id, name, category, subject, body, is_active, created_at, updated_at")
+    .select("id, name, category, subject, body, body_html, is_active, created_at, updated_at")
     .order("updated_at", { ascending: false });
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -22,7 +22,9 @@ export async function POST(req: Request) {
   const name = cleanStr(body.name);
   const category = cleanStr(body.category);
   const subject = cleanStr(body.subject);
+
   const templateBody = cleanStr(body.body);
+  const templateBodyHtml = body.body_html == null ? null : String(body.body_html);
 
   if (!name) return Response.json({ error: "Missing name" }, { status: 400 });
   if (category !== "enrollment" && category !== "compliance") {
@@ -38,9 +40,10 @@ export async function POST(req: Request) {
       category,
       subject,
       body: templateBody,
+      body_html: templateBodyHtml,
       is_active: true,
     })
-    .select("id, name, category, subject, body, is_active, created_at, updated_at")
+    .select("id, name, category, subject, body, body_html, is_active, created_at, updated_at")
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

@@ -55,11 +55,11 @@ export default async function EmployerDashboard({ params }: PageProps) {
   }
 
   const { data: enrollmentTemplates, error: tplErr } = await supabaseServer
-    .from("email_templates")
-    .select("id, name, subject, body, category, is_active, created_at")
-    .eq("category", "enrollment")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
+  .from("email_templates")
+  .select("id, name, subject, body, body_text, body_html, category, is_active, created_at, updated_at")
+  .eq("category", "enrollment")
+  .eq("is_active", true)
+  .order("updated_at", { ascending: false });
 
   if (tplErr) {
     console.warn("Failed loading enrollment templates:", tplErr.message);
