@@ -42,7 +42,7 @@ export async function refreshMicrosoftAccessToken(refreshToken: string) {
 
       // ✅ Keep this aligned with what your app actually needs.
       // For login-only: no Mail.Send
-      scope: "openid profile email offline_access User.Read",
+      scope: "openid profile email offline_access User.Read Mail.Send",
     }),
   });
 

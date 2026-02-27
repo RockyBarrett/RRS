@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import { ensureMicrosoftAccessToken } from "@/lib/microsoftAuth";
 
 export const runtime = "nodejs";
 
@@ -119,88 +120,6 @@ function stripScripts(html: string) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
-function buildHtmlEmail({
-  subject,
-  bodyText,
-  noticeLink,
-  supportEmail,
-}: {
-  subject: string;
-  bodyText: string;
-  noticeLink: string;
-  supportEmail: string;
-}) {
-  const safeSubject = escapeHtml(subject || "");
-  const safeSupport = escapeHtml(supportEmail || "");
-  const safeLink = escapeHtml(noticeLink || "");
-
-  const lines = String(bodyText || "").split("\n");
-  const blocks: string[] = [];
-  let buffer: string[] = [];
-
-  const flush = () => {
-    if (buffer.length) {
-      blocks.push(`<p style="margin:0 0 12px 0; line-height:1.6;">${escapeHtml(buffer.join(" "))}</p>`);
-      buffer = [];
-    }
-  };
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) {
-      flush();
-      blocks.push(`<div style="height:10px;"></div>`);
-      continue;
-    }
-    buffer.push(line);
-  }
-  flush();
-
-  const content = blocks.join("");
-
-  return `
-  <div style="background:#f5f7fa; padding:28px 12px;">
-    <div style="max-width:640px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
-      <div style="padding:18px 20px; border-bottom:1px solid #e5e7eb; font-family:Arial, sans-serif;">
-        <div style="font-size:12px; letter-spacing:.4px; text-transform:uppercase; color:#6b7280;">
-          Benefits Notice
-        </div>
-        <div style="margin-top:6px; font-size:18px; font-weight:700; color:#111827;">
-          ${safeSubject}
-        </div>
-      </div>
-
-      <div style="padding:18px 20px; font-family:Arial, sans-serif; font-size:14px; color:#111827;">
-        ${content}
-
-        <div style="margin:18px 0 10px 0; text-align:center;">
-          <a href="${safeLink}"
-             style="display:inline-block; background:#355A7C; color:#ffffff; text-decoration:none;
-                    padding:12px 18px; border-radius:10px; font-weight:700;">
-            Review Notice
-          </a>
-        </div>
-
-        <div style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.5;">
-          If the button doesn’t work, copy and paste this link into your browser:
-          <div style="margin-top:6px; color:#355A7C; word-break:break-all;">
-            ${safeLink}
-          </div>
-        </div>
-
-        ${
-          safeSupport
-            ? `<div style="margin-top:14px; font-size:12px; color:#6b7280;">
-                 Questions? Contact <strong style="color:#111827;">${safeSupport}</strong>
-               </div>`
-            : ""
-        }
-      </div>
-    </div>
-  </div>
-  `.trim();
-}
-
 function buildHtmlWrapper({
   subject,
   innerHtml,
@@ -208,7 +127,7 @@ function buildHtmlWrapper({
   supportEmail,
 }: {
   subject: string;
-  innerHtml: string;     // already-rendered HTML (scripts stripped)
+  innerHtml: string;
   noticeLink: string;
   supportEmail: string;
 }) {
@@ -325,6 +244,40 @@ async function sendGmail({
   return sendJson;
 }
 
+async function sendMicrosoftGraph({
+  to,
+  subject,
+  html,
+  accessToken,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+  accessToken: string;
+}) {
+  const safeSubject = (subject || "").replace(/\r?\n/g, " ").trim();
+
+  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        subject: safeSubject,
+        body: { contentType: "HTML", content: html || "" },
+        toRecipients: [{ emailAddress: { address: to } }],
+      },
+      saveToSentItems: true,
+    }),
+  });
+
+  const json = await res.json().catch(() => ({} as any));
+  if (!res.ok) throw new Error(json?.error?.message || "Microsoft Graph sendMail failed");
+  return json;
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const caller = await getCaller(req);
   if (!caller) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -358,7 +311,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (empErr || !employer) return Response.json({ error: "Employer not found" }, { status: 404 });
 
-  // ✅ IMPORTANT: include body_text/body_html so rich formatting can send
   const { data: tmpl, error: tmplErr } = await supabaseServer
     .from("email_templates")
     .select("id, subject, body, body_text, body_html, is_active")
@@ -368,7 +320,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
   if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
 
-  // ✅ Sender selection
+  // ✅ Sender selection (Gmail admin, HR can be Gmail OR Microsoft)
+  let providerUsed: "gmail" | "microsoft" = "gmail";
   let acct: any = null;
 
   if (caller.kind === "admin") {
@@ -391,16 +344,41 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
 
     acct = data;
+    providerUsed = "gmail";
   } else {
-    const { data } = await supabaseServer
+    // 1) Try Gmail sender for this HR user
+    const { data: g } = await supabaseServer
       .from("gmail_accounts")
-      .select("user_email, access_token, refresh_token, expires_at, status, employer_id, connected_by_hr_user_id")
+      .select("user_email, access_token, refresh_token, expires_at, status, employer_id, connected_by_hr_user_id, created_at")
       .eq("status", "approved")
       .eq("employer_id", employerId)
       .eq("connected_by_hr_user_id", caller.hrUserId)
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    acct = data;
+    if (g) {
+      acct = g;
+      providerUsed = "gmail";
+    } else {
+      // 2) Try Microsoft sender for this HR user
+      const { data: m } = await supabaseServer
+        .from("microsoft_accounts")
+        .select("user_email, access_token, refresh_token, expires_at, status, employer_id, requested_by_hr_user_id, created_at")
+        .eq("status", "approved")
+        .eq("employer_id", employerId)
+        .eq("requested_by_hr_user_id", caller.hrUserId)
+        .not("refresh_token", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (m) {
+        acct = m;
+        providerUsed = "microsoft";
+      }
+    }
   }
 
   if (!acct) {
@@ -415,28 +393,45 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     );
   }
 
-  const fromEmail = String((acct as any).user_email || "").trim();
+  const fromEmail = String((acct as any).user_email || "").trim().toLowerCase();
   const refreshToken = String((acct as any).refresh_token || "");
   let accessToken = String((acct as any).access_token || "");
-  const expiresAtMs = new Date(String((acct as any).expires_at || "")).getTime();
+  const expiresAtRaw = String((acct as any).expires_at || "");
 
-  if (!refreshToken) return Response.json({ error: "Sender refresh_token missing. Reconnect sender." }, { status: 400 });
+  if (!refreshToken) {
+    return Response.json({ error: "Sender refresh_token missing. Reconnect sender." }, { status: 400 });
+  }
 
-  if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
-    const refreshed = await refreshAccessToken(refreshToken);
-    accessToken = refreshed.access_token;
+  // ✅ Ensure valid token for chosen provider
+  if (providerUsed === "gmail") {
+    const expiresAtMs = new Date(expiresAtRaw).getTime();
 
-    const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+    if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
+      const refreshed = await refreshAccessToken(refreshToken);
+      accessToken = refreshed.access_token;
 
-    const q = supabaseServer
-      .from("gmail_accounts")
-      .update({ access_token: accessToken, expires_at: newExpiresAt })
-      .eq("user_email", fromEmail);
+      const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
 
-    if (caller.kind === "admin") q.is("employer_id", null);
-    else q.eq("employer_id", employerId);
+      const q = supabaseServer
+        .from("gmail_accounts")
+        .update({ access_token: accessToken, expires_at: newExpiresAt })
+        .eq("user_email", fromEmail);
 
-    await q;
+      if (caller.kind === "admin") q.is("employer_id", null);
+      else q.eq("employer_id", employerId);
+
+      await q;
+    }
+  } else {
+    // Microsoft: use your helper (supports refresh token rotation and DB persistence)
+    const ensured = await ensureMicrosoftAccessToken({
+      userEmail: fromEmail,
+      accessToken,
+      refreshToken,
+      expiresAt: expiresAtRaw || null,
+    });
+
+    accessToken = ensured.access_token;
   }
 
   // Employees
@@ -454,7 +449,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   let sent = 0;
   const failed: Array<{ employee_id: string; error: string }> = [];
 
-  // ✅ pick template channels
+  // pick template channels
   const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
   const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
 
@@ -499,38 +494,45 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     };
 
     const renderedSubject = renderTemplate(String((tmpl as any).subject || ""), vars);
-
-    // ✅ TEXT: use body_text (or legacy body)
     const renderedText = renderTemplate(bodyTextTemplate, vars);
 
     const finalSubject = subject_override ? renderTemplate(subject_override, vars) : renderedSubject;
     const finalText = body_override ? renderTemplate(body_override, vars) : renderedText;
 
-    // ✅ HTML: if template has body_html, use it (rich formatting survives)
-    // Otherwise fallback to your wrapper generated from text.
-    const innerHtml = bodyHtmlTemplate.trim().length
-  ? stripScripts(renderTemplate(bodyHtmlTemplate, vars))
-  : (() => {
-      const escaped = escapeHtml(finalText || "").replace(/\n/g, "<br/>");
-      return `<div style="white-space:normal;">${escaped}</div>`;
-    })();
+    const innerHtml =
+      bodyHtmlTemplate.trim().length
+        ? stripScripts(renderTemplate(bodyHtmlTemplate, vars))
+        : (() => {
+            const escaped = escapeHtml(finalText || "").replace(/\n/g, "<br/>");
+            return `<div style="white-space:normal;">${escaped}</div>`;
+          })();
 
-const html = buildHtmlWrapper({
-  subject: finalSubject || "Benefits Notice",
-  innerHtml,
-  noticeLink: String(vars["links.notice"] || ""),
-  supportEmail: String(vars["employer.support_email"] || ""),
-});
+    const html = buildHtmlWrapper({
+      subject: finalSubject || "Benefits Notice",
+      innerHtml,
+      noticeLink: String(vars["links.notice"] || ""),
+      supportEmail: String(vars["employer.support_email"] || ""),
+    });
 
     try {
-      await sendGmail({
-        from: fromEmail,
-        to,
-        subject: finalSubject || "Benefits Notice",
-        text: finalText || "",
-        html,
-        accessToken,
-      });
+      if (providerUsed === "gmail") {
+        await sendGmail({
+          from: fromEmail,
+          to,
+          subject: finalSubject || "Benefits Notice",
+          text: finalText || "",
+          html,
+          accessToken,
+        });
+      } else {
+        // Microsoft Graph sendMail uses HTML body
+        await sendMicrosoftGraph({
+          to,
+          subject: finalSubject || "Benefits Notice",
+          html,
+          accessToken,
+        });
+      }
 
       sent++;
 
@@ -569,6 +571,7 @@ const html = buildHtmlWrapper({
     sent,
     failed_count: failed.length,
     failed,
+    provider_used: providerUsed,
     sender_email_used: fromEmail,
   });
 }

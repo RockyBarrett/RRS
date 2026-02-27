@@ -31,7 +31,6 @@ export async function getConnectedEmail(args: {
     const adminEmail = String(process.env.ADMIN_SENDER_EMAIL || "").trim().toLowerCase();
     if (!adminEmail) return { connectedEmail: null, reason: "ADMIN_SENDER_EMAIL missing" };
 
-    // ✅ Pick the newest APPROVED admin sender that actually has refresh_token
     const { data, error } = await supabaseServer
       .from("gmail_accounts")
       .select("user_email, status, refresh_token, created_at, employer_id")
@@ -55,21 +54,74 @@ export async function getConnectedEmail(args: {
   const hrUserId = await getHrUserIdFromSession();
   if (!hrUserId) return { connectedEmail: null, reason: "HR session missing/expired" };
 
-  const { data, error } = await supabaseServer
-    .from("gmail_accounts")
-    .select("user_email, status, refresh_token, connected_by_hr_user_id, employer_id, created_at")
-    .eq("employer_id", args.employerId)
-    .eq("connected_by_hr_user_id", hrUserId)
-    .eq("status", "approved")
-    .not("refresh_token", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
+  // Employer selected Microsoft sender (this column EXISTS in your schema)
+  const { data: employer, error: empErr } = await supabaseServer
+    .from("employers")
+    .select("id, sender_email_microsoft")
+    .eq("id", args.employerId)
     .maybeSingle();
 
-  if (error) return { connectedEmail: null, reason: error.message };
-  if (!data) return { connectedEmail: null, reason: "No approved HR sender for this employer (with refresh_token)" };
+  if (empErr) return { connectedEmail: null, reason: empErr.message };
 
-  return {
-    connectedEmail: String((data as any).user_email || "").trim().toLowerCase() || null,
-  };
+  const selectedMicrosoft = String((employer as any)?.sender_email_microsoft || "").trim().toLowerCase();
+
+  // 1) If employer selected Microsoft sender, verify it exists for THIS HR user
+  if (selectedMicrosoft) {
+    const { data, error } = await supabaseServer
+      .from("microsoft_accounts")
+      .select("user_email, status, refresh_token, requested_by_hr_user_id, employer_id, created_at")
+      .eq("employer_id", args.employerId)
+      .eq("requested_by_hr_user_id", hrUserId)
+      .eq("user_email", selectedMicrosoft)
+      .eq("status", "approved")
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) return { connectedEmail: null, reason: error.message };
+    if (data?.user_email) {
+      return { connectedEmail: String((data as any).user_email || "").trim().toLowerCase() || null };
+    }
+  }
+
+  // 2) Fallback: newest approved Gmail sender for THIS HR user
+  {
+    const { data, error } = await supabaseServer
+      .from("gmail_accounts")
+      .select("user_email, status, refresh_token, connected_by_hr_user_id, employer_id, created_at")
+      .eq("employer_id", args.employerId)
+      .eq("connected_by_hr_user_id", hrUserId)
+      .eq("status", "approved")
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) return { connectedEmail: null, reason: error.message };
+    const row = data?.[0];
+    if (row?.user_email) {
+      return { connectedEmail: String((row as any).user_email || "").trim().toLowerCase() || null };
+    }
+  }
+
+  // 3) Fallback: newest approved Microsoft sender for THIS HR user
+  {
+    const { data, error } = await supabaseServer
+      .from("microsoft_accounts")
+      .select("user_email, status, refresh_token, requested_by_hr_user_id, employer_id, created_at")
+      .eq("employer_id", args.employerId)
+      .eq("requested_by_hr_user_id", hrUserId)
+      .eq("status", "approved")
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) return { connectedEmail: null, reason: error.message };
+    const row = data?.[0];
+    if (row?.user_email) {
+      return { connectedEmail: String((row as any).user_email || "").trim().toLowerCase() || null };
+    }
+  }
+
+  return { connectedEmail: null, reason: "No approved HR sender for this employer (with refresh_token)" };
 }

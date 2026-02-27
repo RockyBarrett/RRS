@@ -9,6 +9,7 @@ export async function getSenderStatus(args: {
     const adminEmail = String(process.env.ADMIN_SENDER_EMAIL || "").trim().toLowerCase();
     if (!adminEmail) return { connected: false, reason: "ADMIN_SENDER_EMAIL not set" };
 
+    // Admin uses system Gmail sender (unchanged)
     const { data, error } = await supabaseServer
       .from("gmail_accounts")
       .select("user_email, status, refresh_token, expires_at")
@@ -31,17 +32,45 @@ export async function getSenderStatus(args: {
   if (!employerId) return { connected: false, reason: "Missing employerId" };
   if (!hrUserId) return { connected: false, reason: "Missing hrUserId" };
 
-  const { data, error } = await supabaseServer
-    .from("gmail_accounts")
-    .select("user_email, status, refresh_token, employer_id, connected_by_hr_user_id")
-    .eq("employer_id", employerId)
-    .eq("connected_by_hr_user_id", hrUserId)
-    .eq("status", "approved")
-    .maybeSingle();
+  // 1) Gmail sender connected by THIS HR user (multi-sender safe)
+  {
+    const { data, error } = await supabaseServer
+      .from("gmail_accounts")
+      .select("user_email, status, refresh_token, employer_id, connected_by_hr_user_id, created_at")
+      .eq("employer_id", employerId)
+      .eq("connected_by_hr_user_id", hrUserId)
+      .eq("status", "approved")
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-  if (error) return { connected: false, reason: error.message };
-  if (!data) return { connected: false, reason: "No approved HR sender connected for this employer" };
-  if (!(data as any).refresh_token) return { connected: false, reason: "HR sender missing refresh token" };
+    if (error) return { connected: false, reason: error.message };
 
-  return { connected: true, email: String((data as any).user_email || "") };
+    const row = data?.[0];
+    if (row?.user_email) {
+      return { connected: true, email: String((row as any).user_email || "") };
+    }
+  }
+
+  // 2) Microsoft sender connected by THIS HR user (multi-sender safe)
+  {
+    const { data, error } = await supabaseServer
+      .from("microsoft_accounts")
+      .select("user_email, status, refresh_token, employer_id, requested_by_hr_user_id, created_at")
+      .eq("employer_id", employerId)
+      .eq("requested_by_hr_user_id", hrUserId)
+      .eq("status", "approved")
+      .not("refresh_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    if (error) return { connected: false, reason: error.message };
+
+    const row = data?.[0];
+    if (row?.user_email) {
+      return { connected: true, email: String((row as any).user_email || "") };
+    }
+  }
+
+  return { connected: false, reason: "No approved HR sender connected for this employer" };
 }
