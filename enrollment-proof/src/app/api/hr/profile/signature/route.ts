@@ -31,19 +31,18 @@ export async function POST(req: Request) {
   }
 
   const form = await req.formData();
-  const raw = String(form.get("signature_html") || "");
+  const raw = String(form.get("signature_text") || "");
 
+  // store as plain text (no HTML) to keep HR UX simple
   const cleaned = stripScripts(raw).trim();
   const hrUserId = String((session as any).hr_user_id);
 
   const { error } = await supabaseServer
     .from("hr_users")
-    .update({ signature_html: cleaned || null })
+    .update({ signature_text: cleaned || null })
     .eq("id", hrUserId);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.redirect(new URL("/hr/profile", req.url));
 }

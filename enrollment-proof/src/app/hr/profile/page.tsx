@@ -13,8 +13,33 @@ function isExpired(expiresAt: string | null | undefined) {
   return Date.now() > t;
 }
 
+function escapeHtml(s: string) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function signatureTextToPreviewHtml(text: string) {
+  const safe = escapeHtml(String(text || "")).trim();
+  if (!safe) return "<span style='color:#6b7280;'>No signature yet.</span>";
+
+  const lines = safe.split("\n");
+  const first = lines.shift() || "";
+
+  // Bold first line (name), rest normal
+  const rest = lines.map((l) => (l.trim() ? `${l}<br/>` : "<br/>")).join("");
+
+  return `
+    <div style="font-size:13px;color:#111827;line-height:1.45;">
+      <strong>${first}</strong><br/>
+      ${rest}
+    </div>
+  `.trim();
+}
+
 export default async function HrProfilePage() {
-  // ✅ HR session
   const cookieStore = await cookies();
   const sessionToken = cookieStore.get("rrs_hr_session")?.value || "";
   if (!sessionToken) redirect("/login");
@@ -31,7 +56,7 @@ export default async function HrProfilePage() {
 
   const { data: hrUser, error: hrErr } = await supabaseServer
     .from("hr_users")
-    .select("id, email, display_name, signature_html")
+    .select("id, email, display_name, signature_text")
     .eq("id", hrUserId)
     .maybeSingle();
 
@@ -45,6 +70,9 @@ export default async function HrProfilePage() {
       </main>
     );
   }
+
+  const signatureText = String((hrUser as any).signature_text || "");
+  const previewHtml = signatureTextToPreviewHtml(signatureText);
 
   return (
     <main style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -68,17 +96,17 @@ export default async function HrProfilePage() {
 
           <form action="/api/hr/profile/signature" method="post">
             <textarea
-              name="signature_html"
-              defaultValue={String((hrUser as any).signature_html || "")}
-              placeholder={`Example:\n<div style="font-size:13px;color:#111827;">\n  <strong>Your Name</strong><br/>\n  HR Manager\n</div>`}
+              name="signature_text"
+              defaultValue={signatureText}
+              placeholder={`Example:\nRocky Barrett\nHR Manager\n(205) 555-1234`}
               style={{
                 width: "100%",
-                minHeight: 180,
+                minHeight: 140,
                 padding: 12,
                 borderRadius: 12,
                 border: "1px solid #e5e7eb",
                 fontSize: 14,
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial",
               }}
             />
 
@@ -88,7 +116,7 @@ export default async function HrProfilePage() {
               </button>
 
               <span style={{ ...subtleText, fontSize: 12 }}>
-                Tip: keep it simple HTML (div / br / strong). No scripts.
+                Tip: Put your name on the first line — we’ll bold it automatically.
               </span>
             </div>
           </form>
@@ -102,9 +130,7 @@ export default async function HrProfilePage() {
                 padding: 12,
                 background: "#ffffff",
               }}
-              dangerouslySetInnerHTML={{
-                __html: String((hrUser as any).signature_html || "") || "<span style='color:#6b7280;'>No signature yet.</span>",
-              }}
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>
         </div>

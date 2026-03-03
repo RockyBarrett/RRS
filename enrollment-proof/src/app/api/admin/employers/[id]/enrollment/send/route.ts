@@ -121,6 +121,20 @@ function stripScripts(html: string) {
   return String(html || "").replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
 }
 
+function normalizeNewlines(s: string) {
+  return String(s || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function renderSignatureHtmlFromText(signatureText: string) {
+  const text = normalizeNewlines(signatureText).trim();
+  if (!text) return "";
+  const safe = escapeHtml(text);
+  return `<div style="margin-top:14px;font-size:13px;color:#111827;line-height:1.4;font-family:Arial,sans-serif;">${safe.replace(
+    /\n/g,
+    "<br/>"
+  )}</div>`;
+}
+
 function buildHtmlWrapper({
   subject,
   innerHtml,
@@ -171,7 +185,7 @@ function buildHtmlWrapper({
   `.trim();
 }
 
-// ✅ Simple email-safe button HTML (no huge block spacing)
+// ✅ Simple email-safe button HTML
 function noticeButtonHtml(href: string, label = "Review Notice") {
   const safeHref = escapeHtml(String(href || ""));
   const safeLabel = escapeHtml(String(label || "Review Notice"));
@@ -215,49 +229,49 @@ async function sendGmail({
   let raw = "";
 
   if (html) {
-  const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
+    const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
 
-  const textB64 = Buffer.from(text || "", "utf8").toString("base64");
-  const htmlB64 = Buffer.from(html || "", "utf8").toString("base64");
+    const textB64 = Buffer.from(text || "", "utf8").toString("base64");
+    const htmlB64 = Buffer.from(html || "", "utf8").toString("base64");
 
-  raw = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${safeSubject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    ``,
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
+      ``,
 
-    `--${boundary}`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    textB64,
-    ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      textB64,
+      ``,
 
-    `--${boundary}`,
-    `Content-Type: text/html; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    htmlB64,
-    ``,
+      `--${boundary}`,
+      `Content-Type: text/html; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      htmlB64,
+      ``,
 
-    `--${boundary}--`,
-    ``,
-  ].join("\r\n");
-} else {
-  const textB64 = Buffer.from(text || "", "utf8").toString("base64");
-  raw = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: ${safeSubject}`,
-    `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    `Content-Transfer-Encoding: base64`,
-    ``,
-    textB64,
-  ].join("\r\n");
-}
+      `--${boundary}--`,
+      ``,
+    ].join("\r\n");
+  } else {
+    const textB64 = Buffer.from(text || "", "utf8").toString("base64");
+    raw = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${safeSubject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      `Content-Transfer-Encoding: base64`,
+      ``,
+      textB64,
+    ].join("\r\n");
+  }
 
   const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -346,18 +360,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
   if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
 
-  // ✅ Load HR signature once (Option A) so it works for Gmail + Microsoft
-  let hrSignatureHtml = "";
+  // ✅ HR signature (plain text only in DB). We generate HTML from it.
   let hrSignatureText = "";
+  let hrSignatureHtml = "";
   if (caller.kind === "hr") {
     const { data: hrUser } = await supabaseServer
       .from("hr_users")
-      .select("signature_html, signature_text")
+      .select("signature_text")
       .eq("id", caller.hrUserId)
       .maybeSingle();
 
-    hrSignatureHtml = String((hrUser as any)?.signature_html || "").trim();
     hrSignatureText = String((hrUser as any)?.signature_text || "").trim();
+    hrSignatureHtml = renderSignatureHtmlFromText(hrSignatureText);
   }
 
   // ✅ Sender selection (Gmail admin, HR can be Gmail OR Microsoft)
@@ -445,7 +459,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // ✅ Ensure valid token for chosen provider
   if (providerUsed === "gmail") {
     const expiresAtMs = new Date(expiresAtRaw).getTime();
-
     if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
       const refreshed = await refreshAccessToken(refreshToken);
       accessToken = refreshed.access_token;
@@ -464,12 +477,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
   } else {
     const ensured = await ensureMicrosoftAccessToken({
-  userEmail: fromEmail,
-  employerId: caller.kind === "admin" ? null : employerId, // ✅ IMPORTANT
-  accessToken,
-  refreshToken,
-  expiresAt: expiresAtRaw || null,
-});
+      userEmail: fromEmail,
+      employerId: caller.kind === "admin" ? null : employerId, // ✅ IMPORTANT
+      accessToken,
+      refreshToken,
+      expiresAt: expiresAtRaw || null,
+    });
 
     accessToken = ensured.access_token;
   }
@@ -489,7 +502,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   let sent = 0;
   const failed: Array<{ employee_id: string; error: string }> = [];
 
-  // pick template channels
+  // Template channels
   const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
   const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
 
@@ -537,13 +550,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       "program.effective_date": fmtDateNice((employer as any).effective_date),
       "program.opt_out_deadline": fmtDateNice((employer as any).opt_out_deadline),
 
-      // ✅ Links (both options)
-      "links.notice": noticeUrl, // backwards compatible raw link
+      // Links
+      "links.notice": noticeUrl,
       "links.notice_url": noticeUrl,
       "links.notice_button": noticeButton,
       "links.learn_more": learnMoreUrl,
 
-      // ✅ Signature vars (Option A)
+      // Signature (generated HTML + plain text)
       "hr.signature_html": hrSignatureHtml,
       "hr.signature_text": hrSignatureText,
     };
@@ -562,7 +575,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             return `<div style="white-space:normal;">${escaped}</div>`;
           })();
 
-    // ✅ Auto-append signature ONLY if template didn't place it
+    // Auto-append signature ONLY if template didn't place it
     if (caller.kind === "hr" && !templateHasSigTokens) {
       if (hrSignatureHtml) innerHtml = `${innerHtml}<br/><br/>${hrSignatureHtml}`;
       if (hrSignatureText) finalText = `${finalText}\n\n${hrSignatureText}`;
