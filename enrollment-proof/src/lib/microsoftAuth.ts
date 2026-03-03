@@ -40,8 +40,8 @@ export async function refreshMicrosoftAccessToken(refreshToken: string) {
       grant_type: "refresh_token",
       refresh_token: String(refreshToken),
 
-      // ✅ Keep this aligned with what your app actually needs.
-      // For login-only: no Mail.Send
+      // Keep aligned with send needs (Mail.Send). If you later do login-only,
+      // you can use a narrower scope in that specific flow.
       scope: "openid profile email offline_access User.Read Mail.Send",
     }),
   });
@@ -62,10 +62,11 @@ export async function refreshMicrosoftAccessToken(refreshToken: string) {
 
 /**
  * Ensure a Microsoft account row has a valid access token.
- * Updates microsoft_accounts if it refreshes (and supports refresh_token rotation).
+ * IMPORTANT: In a multi-sender world, you must update the correct row.
  */
 export async function ensureMicrosoftAccessToken(args: {
   userEmail: string;
+  employerId: string | null; // ✅ add this
   accessToken: string | null | undefined;
   refreshToken: string;
   expiresAt: string | null | undefined;
@@ -80,7 +81,7 @@ export async function ensureMicrosoftAccessToken(args: {
     const nextExpiresAt = isoFromExpiresIn(refreshed.expires_in);
     const nextRefreshToken = refreshed.refresh_token || args.refreshToken;
 
-    const { error } = await supabaseServer
+    let q = supabaseServer
       .from("microsoft_accounts")
       .update({
         access_token: refreshed.access_token,
@@ -89,6 +90,12 @@ export async function ensureMicrosoftAccessToken(args: {
         scope: refreshed.scope || null,
       })
       .eq("user_email", userEmail);
+
+    // ✅ scope update to the correct employer row
+    if (args.employerId === null) q = q.is("employer_id", null);
+    else q = q.eq("employer_id", args.employerId);
+
+    const { error } = await q;
 
     if (error) {
       throw new Error(`Failed to persist refreshed Microsoft token: ${error.message}`);

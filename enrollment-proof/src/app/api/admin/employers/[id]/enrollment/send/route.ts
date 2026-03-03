@@ -1,3 +1,4 @@
+// /src/app/api/admin/employers/[id]/enrollment/send/route.ts
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ensureMicrosoftAccessToken } from "@/lib/microsoftAuth";
 
@@ -105,7 +106,7 @@ function fmtDateNice(dateStr: string | null | undefined) {
 }
 
 /* ----------------------------
-   HTML email helpers (legacy fallback)
+   HTML email helpers
 ----------------------------- */
 
 function escapeHtml(s: string) {
@@ -150,16 +151,8 @@ function buildHtmlWrapper({
       <div style="padding:18px 20px; font-family:Arial, sans-serif; font-size:14px; color:#111827; line-height:1.6;">
         ${innerHtml}
 
-        <div style="margin:18px 0 10px 0; text-align:center;">
-          <a href="${safeLink}"
-             style="display:inline-block; background:#355A7C; color:#ffffff; text-decoration:none;
-                    padding:12px 18px; border-radius:10px; font-weight:700;">
-            Review Notice
-          </a>
-        </div>
-
-        <div style="margin-top:10px; font-size:12px; color:#6b7280; line-height:1.5;">
-          If the button doesn’t work, copy and paste this link into your browser:
+        <div style="margin-top:18px; font-size:12px; color:#6b7280; line-height:1.5;">
+          If the link does not work, copy and paste this into your browser:
           <div style="margin-top:6px; color:#355A7C; word-break:break-all;">
             ${safeLink}
           </div>
@@ -176,6 +169,30 @@ function buildHtmlWrapper({
     </div>
   </div>
   `.trim();
+}
+
+// ✅ Simple email-safe button HTML (no huge block spacing)
+function noticeButtonHtml(href: string, label = "Review Notice") {
+  const safeHref = escapeHtml(String(href || ""));
+  const safeLabel = escapeHtml(String(label || "Review Notice"));
+
+  return `
+<a href="${safeHref}"
+   style="
+     display:inline-block;
+     padding:6px 12px;
+     border-radius:6px;
+     background:#5d83a5;
+     color:#ffffff;
+     font-family:Arial, sans-serif;
+     font-weight:700;
+     font-size:13px;
+     text-decoration:none;
+     line-height:1.1;
+     vertical-align:middle;
+   ">
+  ${safeLabel}
+</a>`.trim();
 }
 
 async function sendGmail({
@@ -198,40 +215,49 @@ async function sendGmail({
   let raw = "";
 
   if (html) {
-    const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
+  const boundary = "flow_boundary_" + Math.random().toString(16).slice(2);
 
-    raw = [
-      `From: ${from}`,
-      `To: ${to}`,
-      `Subject: ${safeSubject}`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/alternative; boundary="${boundary}"`,
-      ``,
-      `--${boundary}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      text || "",
-      ``,
-      `--${boundary}`,
-      `Content-Type: text/html; charset="UTF-8"`,
-      `Content-Transfer-Encoding: 7bit`,
-      ``,
-      html,
-      ``,
-      `--${boundary}--`,
-      ``,
-    ].join("\r\n");
-  } else {
-    raw = [
-      `From: ${from}`,
-      `To: ${to}`,
-      `Subject: ${safeSubject}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      ``,
-      text || "",
-    ].join("\r\n");
-  }
+  const textB64 = Buffer.from(text || "", "utf8").toString("base64");
+  const htmlB64 = Buffer.from(html || "", "utf8").toString("base64");
+
+  raw = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${safeSubject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    ``,
+
+    `--${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    textB64,
+    ``,
+
+    `--${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    htmlB64,
+    ``,
+
+    `--${boundary}--`,
+    ``,
+  ].join("\r\n");
+} else {
+  const textB64 = Buffer.from(text || "", "utf8").toString("base64");
+  raw = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${safeSubject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    textB64,
+  ].join("\r\n");
+}
 
   const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -319,6 +345,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
   if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
+
+  // ✅ Load HR signature once (Option A) so it works for Gmail + Microsoft
+  let hrSignatureHtml = "";
+  let hrSignatureText = "";
+  if (caller.kind === "hr") {
+    const { data: hrUser } = await supabaseServer
+      .from("hr_users")
+      .select("signature_html, signature_text")
+      .eq("id", caller.hrUserId)
+      .maybeSingle();
+
+    hrSignatureHtml = String((hrUser as any)?.signature_html || "").trim();
+    hrSignatureText = String((hrUser as any)?.signature_text || "").trim();
+  }
 
   // ✅ Sender selection (Gmail admin, HR can be Gmail OR Microsoft)
   let providerUsed: "gmail" | "microsoft" = "gmail";
@@ -423,13 +463,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       await q;
     }
   } else {
-    // Microsoft: use your helper (supports refresh token rotation and DB persistence)
     const ensured = await ensureMicrosoftAccessToken({
-      userEmail: fromEmail,
-      accessToken,
-      refreshToken,
-      expiresAt: expiresAtRaw || null,
-    });
+  userEmail: fromEmail,
+  employerId: caller.kind === "admin" ? null : employerId, // ✅ IMPORTANT
+  accessToken,
+  refreshToken,
+  expiresAt: expiresAtRaw || null,
+});
 
     accessToken = ensured.access_token;
   }
@@ -452,6 +492,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   // pick template channels
   const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
   const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
+
+  const templateHasSigTokens =
+    bodyHtmlTemplate.includes("{{hr.signature_html}}") ||
+    bodyTextTemplate.includes("{{hr.signature_text}}");
 
   for (const e of employees ?? []) {
     attempted++;
@@ -478,6 +522,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       continue;
     }
 
+    const noticeUrl = `${baseUrl}/notice/${token}`;
+    const learnMoreUrl = `${baseUrl}/notice/${token}/learn-more`;
+    const noticeButton = noticeButtonHtml(noticeUrl, "Review Notice");
+
     const vars: Record<string, string> = {
       "employee.first_name": String((e as any).first_name || ""),
       "employee.last_name": String((e as any).last_name || ""),
@@ -489,23 +537,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       "program.effective_date": fmtDateNice((employer as any).effective_date),
       "program.opt_out_deadline": fmtDateNice((employer as any).opt_out_deadline),
 
-      "links.notice": `${baseUrl}/notice/${token}`,
-      "links.learn_more": `${baseUrl}/notice/${token}/learn-more`,
+      // ✅ Links (both options)
+      "links.notice": noticeUrl, // backwards compatible raw link
+      "links.notice_url": noticeUrl,
+      "links.notice_button": noticeButton,
+      "links.learn_more": learnMoreUrl,
+
+      // ✅ Signature vars (Option A)
+      "hr.signature_html": hrSignatureHtml,
+      "hr.signature_text": hrSignatureText,
     };
 
     const renderedSubject = renderTemplate(String((tmpl as any).subject || ""), vars);
     const renderedText = renderTemplate(bodyTextTemplate, vars);
 
     const finalSubject = subject_override ? renderTemplate(subject_override, vars) : renderedSubject;
-    const finalText = body_override ? renderTemplate(body_override, vars) : renderedText;
+    let finalText = body_override ? renderTemplate(body_override, vars) : renderedText;
 
-    const innerHtml =
+    let innerHtml =
       bodyHtmlTemplate.trim().length
         ? stripScripts(renderTemplate(bodyHtmlTemplate, vars))
         : (() => {
             const escaped = escapeHtml(finalText || "").replace(/\n/g, "<br/>");
             return `<div style="white-space:normal;">${escaped}</div>`;
           })();
+
+    // ✅ Auto-append signature ONLY if template didn't place it
+    if (caller.kind === "hr" && !templateHasSigTokens) {
+      if (hrSignatureHtml) innerHtml = `${innerHtml}<br/><br/>${hrSignatureHtml}`;
+      if (hrSignatureText) finalText = `${finalText}\n\n${hrSignatureText}`;
+    }
 
     const html = buildHtmlWrapper({
       subject: finalSubject || "Benefits Notice",
@@ -525,7 +586,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
           accessToken,
         });
       } else {
-        // Microsoft Graph sendMail uses HTML body
         await sendMicrosoftGraph({
           to,
           subject: finalSubject || "Benefits Notice",

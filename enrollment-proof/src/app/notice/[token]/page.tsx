@@ -34,7 +34,9 @@ export default async function NoticePage({ params }: PageProps) {
 
   const { data: employee } = await supabaseServer
     .from("employees")
-    .select("id, employer_id, first_name, eligible, annual_savings_cents, opted_out_at, election")
+    .select(
+      "id, employer_id, first_name, eligible, annual_savings_cents, opted_out_at, election, insurance_selection"
+    )
     .eq("token", token)
     .maybeSingle();
 
@@ -86,6 +88,12 @@ export default async function NoticePage({ params }: PageProps) {
   const enrollmentType = (employer as any)?.enrollment_type ?? "passive";
   const isActiveEnrollment = enrollmentType === "active";
   const election = ((employee as any)?.election ?? null) as "opt_in" | "opt_out" | null;
+
+  // NEW: insurance selection read from DB
+  const insuranceSelection = ((employee as any)?.insurance_selection ?? null) as
+    | "yes"
+    | "no"
+    | null;
 
   const baselineAnnual = employee.annual_savings_cents ?? 0;
   const isOptedOut = !!employee.opted_out_at;
@@ -165,12 +173,42 @@ export default async function NoticePage({ params }: PageProps) {
               </div>
             </div>
 
-            <p style={{ marginTop: 10, color: "#4b5563" }}>
-              Hi {greetingName} —{" "}
-              {isActiveEnrollment
-                ? "please make a selection below to complete your enrollment."
-                : "please review the statement below."}
-            </p>
+            <div style={{ marginTop: 10, color: "#292b30ff" }}>
+  <div style={{ marginBottom: 14 }}>
+    Hi {greetingName},
+  </div>
+
+  <div style={{ fontSize: 15 }}>
+    {employer.name} is offering a new benefits program designed to help you maintain better physical and mental health while increasing your net take-home pay. This is accomplished through a suite of preventative health care benefits and a unique payroll strategy designed to increase your net take-home pay. 
+    <div style={{ marginTop: 6 }}>
+    (See your Savings Detail below)
+  </div>
+  </div>
+</div>
+            <div
+  style={{
+    marginTop: 1,
+    display: "flex",
+    justifyContent: "flex-end",
+  }}
+>
+  <a
+    href={`/notice/${token}/learn-more`}
+    style={{
+      padding: "8px 10px",
+      borderRadius: 12,
+      border: "1px solid #e5e7eb",
+      background: "#5d83a5ff",
+      color: "#ffffff",
+      fontWeight: 900,
+      fontSize: 13,
+      textDecoration: "none",
+      whiteSpace: "nowrap",
+    }}
+  >
+    Learn more →
+  </a>
+</div>
           </div>
 
           {/* Body */}
@@ -307,23 +345,6 @@ export default async function NoticePage({ params }: PageProps) {
                 }}
               >
                 <div style={{ fontWeight: 900 }}>Your decision</div>
-
-                <a
-                  href={`/notice/${token}/learn-more`}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: 12,
-                    border: "1px solid #e5e7eb",
-                    background: "#5d83a5ff",
-                    color: "#ffffff",
-                    fontWeight: 900,
-                    fontSize: 13,
-                    textDecoration: "none",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Learn more →
-                </a>
               </div>
 
               <InsuranceAffirmation
@@ -383,7 +404,12 @@ export default async function NoticePage({ params }: PageProps) {
                 Questions? Contact <strong style={{ color: "#111827" }}>{supportEmail}</strong>
               </div>
 
-              <ConfirmCloseButton token={token} enrollmentType={enrollmentType} election={election} />
+              <ConfirmCloseButton
+                token={token}
+                enrollmentType={enrollmentType}
+                election={election}
+                insuranceSelection={insuranceSelection}
+              />
             </div>
           </div>
         </div>

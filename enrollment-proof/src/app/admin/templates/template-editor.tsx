@@ -76,11 +76,44 @@ const DEFAULT_VARS: VarDef[] = [
     description: "Replaced with the opt-out deadline date.",
     example: "February 15, 2026",
   },
+
+  {
+  group: "HR",
+  label: "Signature (HTML)",
+  key: "hr.signature_html",
+  description: "The HR sender’s signature (HTML).",
+  example: "<div>—<br/>Craig King<br/>HR Director</div>",
+},
+{
+  group: "HR",
+  label: "Signature (text)",
+  key: "hr.signature_text",
+  description: "The HR sender’s signature (plain text).",
+  example: "—\nCraig King\nHR Director",
+},
+
+  // ----------------
+  // Links
+  // ----------------
   {
     group: "Links",
     label: "Notice link",
     key: "links.notice",
-    description: "The employee’s unique notice link.",
+    description: "The employee’s unique notice link (raw URL).",
+    example: "https://yourdomain.com/notice/abcdef123",
+  },
+  {
+    group: "Links",
+    label: "Notice button",
+    key: "links.notice_button",
+    description: "A styled button linking to the employee’s unique notice.",
+    example: "Review Notice button",
+  },
+  {
+    group: "Links",
+    label: "Notice link (raw explicit)",
+    key: "links.notice_url",
+    description: "The employee’s unique notice URL (raw link).",
     example: "https://yourdomain.com/notice/abcdef123",
   },
   {

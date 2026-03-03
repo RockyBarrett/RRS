@@ -413,26 +413,52 @@ const [previewBodyHtml, setPreviewBodyHtml] = useState<string>("");
   // --------------------
   // Template helpers
   // --------------------
-  function getTemplateById(id: string) {
-    return (templates ?? []).find((t) => t.id === id) || null;
-  }
+function getTemplateById(id: string) {
+  return (templates ?? []).find((t) => t.id === id) || null;
+}
 
+  function noticeButtonHtml(href: string, label = "Review Notice") {
+  const safeHref = String(href || "");
+  const safeLabel = String(label || "Review Notice");
+
+  return `
+<div style="margin: 12px 0 18px 0;">
+  <a href="${safeHref}"
+     style="display:inline-block;padding:12px 22px;border-radius:12px;
+            background:#355A7C;color:#ffffff;text-decoration:none;
+            font-weight:800;font-size:14px;">
+    ${safeLabel} →
+  </a>
+</div>`.trim();
+}
+  
   function applyVars(template: string, e: Employee) {
-    const first = (e.first_name ?? "").trim();
-    const last = (e.last_name ?? "").trim();
+  const first = (e.first_name ?? "").trim();
+  const last = (e.last_name ?? "").trim();
 
-    const noticeLink = `${baseUrl}/notice/${e.token}`;
-    const learnMoreLink = `${baseUrl}/notice/${e.token}/learn-more`;
+  const noticeLink = `${baseUrl}/notice/${e.token}`;
+  const learnMoreLink = `${baseUrl}/notice/${e.token}/learn-more`;
 
-    return (template || "")
-      .replaceAll("{{employee.first_name}}", first || "there")
-      .replaceAll("{{employee.last_name}}", last)
-      .replaceAll("{{employee.email}}", e.email)
-      .replaceAll("{{employer.name}}", employerName)
-      .replaceAll("{{employer.support_email}}", supportEmail)
-      .replaceAll("{{links.notice}}", noticeLink)
-      .replaceAll("{{links.learn_more}}", learnMoreLink);
-  }
+  const noticeButton = noticeButtonHtml(noticeLink, "Review Notice");
+
+  return (template || "")
+    .replaceAll("{{employee.first_name}}", first || "there")
+    .replaceAll("{{employee.last_name}}", last)
+    .replaceAll("{{employee.email}}", e.email)
+    .replaceAll("{{employer.name}}", employerName)
+    .replaceAll("{{employer.support_email}}", supportEmail)
+
+    // ✅ Backwards-compatible raw link
+    .replaceAll("{{links.notice}}", noticeLink)
+
+    // ✅ Explicit raw link option (recommended for fallback blocks)
+    .replaceAll("{{links.notice_url}}", noticeLink)
+
+    // ✅ Button option (recommended as primary CTA)
+    .replaceAll("{{links.notice_button}}", noticeButton)
+
+    .replaceAll("{{links.learn_more}}", learnMoreLink);
+}
 
   // --------------------
   // Preview handlers

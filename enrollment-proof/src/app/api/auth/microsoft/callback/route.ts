@@ -93,16 +93,13 @@ async function getAdminUserIdFromSession(req: Request) {
 }
 
 async function exchangeMicrosoftCodeForToken(code: string, redirectUri: string) {
-  // ✅ match /login + /connect: multi-tenant by default
   const tenant = (process.env.MICROSOFT_TENANT || "organizations").trim();
 
   const client_id = mustEnv("MICROSOFT_CLIENT_ID");
   const client_secret = mustEnv("MICROSOFT_CLIENT_SECRET");
 
   const res = await fetch(
-    `https://login.microsoftonline.com/${encodeURIComponent(
-      tenant
-    )}/oauth2/v2.0/token`,
+    `https://login.microsoftonline.com/${encodeURIComponent(tenant)}/oauth2/v2.0/token`,
     {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -113,8 +110,6 @@ async function exchangeMicrosoftCodeForToken(code: string, redirectUri: string) 
         code,
         redirect_uri: redirectUri,
         // ✅ IMPORTANT: do NOT pass scope here.
-        // Microsoft will issue tokens for the scopes granted during /authorize
-        // (i.e., /login vs /connect).
       }),
     }
   );
@@ -122,9 +117,7 @@ async function exchangeMicrosoftCodeForToken(code: string, redirectUri: string) 
   const data = (await res.json().catch(() => ({} as any))) as TokenResponse;
 
   if (!res.ok || data.error) {
-    throw new Error(
-      data.error_description || data.error || `Token exchange failed (${res.status})`
-    );
+    throw new Error(data.error_description || data.error || `Token exchange failed (${res.status})`);
   }
   if (!data.access_token) throw new Error("Token exchange missing access_token");
 
@@ -137,9 +130,7 @@ async function fetchMicrosoftProfile(accessToken: string) {
   });
 
   const json = await res.json().catch(() => ({} as any));
-  if (!res.ok) {
-    throw new Error(json?.error?.message || "Failed to fetch Microsoft profile");
-  }
+  if (!res.ok) throw new Error(json?.error?.message || "Failed to fetch Microsoft profile");
 
   const email =
     (json?.mail as string | undefined) ||
@@ -158,31 +149,24 @@ export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
 
-    // Read flow + context early so even OAuth errors can return properly
+    // Read flow + context early
     const rawFlow = (getCookie(req, "rrs_oauth_flow") || "ms_login").toLowerCase();
-
-    // ✅ Treat "ms_email_sender" as the employer sender-connect flow
     const flow = rawFlow === "ms_email_sender" ? "ms_employer" : rawFlow;
 
     const returnToCookie = getCookie(req, "rrs_oauth_return_to");
-    const defaultReturnTo =
-      flow === "ms_admin" ? "/admin" : flow === "ms_employer" ? "/hr" : "/login";
+    const defaultReturnTo = flow === "ms_admin" ? "/admin" : flow === "ms_employer" ? "/hr" : "/login";
     const returnTo = safeReturnTo(returnToCookie || defaultReturnTo);
 
-    const employerId = getCookie(req, "rrs_oauth_employer_id"); // required for ms_employer sender connect
+    const employerId = getCookie(req, "rrs_oauth_employer_id"); // required for ms_employer
 
-    // If Microsoft sent an OAuth error (user canceled OR admin approval required)
+    // OAuth error from Microsoft
     const oauthErr = url.searchParams.get("error");
     const oauthErrDesc = url.searchParams.get("error_description");
     if (oauthErr) {
-      // ✅ For sender connect flows, go back to employer page with "pending/error" indicator
       if (flow === "ms_employer") {
         const to = new URL(returnTo, url.origin);
-
-        // If they hit "Return to app without granting consent" or admin approval is required,
-        // the best UX is "pending approval" with a hint.
         to.searchParams.set("ms_sender_status", "pending");
-        if (oauthErr) to.searchParams.set("ms_error", oauthErr);
+        to.searchParams.set("ms_error", oauthErr);
         if (oauthErrDesc) to.searchParams.set("ms_error_description", oauthErrDesc);
 
         const res = NextResponse.redirect(to);
@@ -192,7 +176,6 @@ export async function GET(req: Request) {
         return res;
       }
 
-      // For login/admin flows, keep your existing behavior (send to login with error)
       const to = new URL("/login", url.origin);
       to.searchParams.set("error", oauthErr);
       if (oauthErrDesc) to.searchParams.set("error_description", oauthErrDesc);
@@ -201,7 +184,6 @@ export async function GET(req: Request) {
 
     const code = url.searchParams.get("code");
     if (!code) {
-      // Same: sender connect should go back with a visible error
       if (flow === "ms_employer") {
         const to = new URL(returnTo, url.origin);
         to.searchParams.set("ms_sender_status", "pending");
@@ -223,40 +205,44 @@ export async function GET(req: Request) {
 
     const tokens = await exchangeMicrosoftCodeForToken(code, redirectUri);
     const profile = await fetchMicrosoftProfile(String(tokens.access_token));
-    if (!profile.email) {
-      throw new Error("Microsoft profile missing email (mail/userPrincipalName).");
-    }
+    if (!profile.email) throw new Error("Microsoft profile missing email (mail/userPrincipalName).");
 
     const expiresAt = isoFromExpiresIn(tokens.expires_in);
 
     // ----------------------------
-    // MS EMPLOYER FLOW (HR only)  (includes ms_email_sender)
+    // MS EMPLOYER FLOW (HR sender connect)
     // ----------------------------
     if (flow === "ms_employer") {
       const hrUserId = await getHrUserIdFromSession(req);
-     if (!hrUserId) {
-  const to = new URL(returnTo, url.origin);
-  to.searchParams.set("ms_sender_status", "pending");
-  to.searchParams.set("ms_error", "hr_session_required");
-  to.searchParams.set(
-    "ms_error_description",
-    "Your Flow session cookie was not available during Microsoft connect. This is usually caused by a domain mismatch (www vs non-www or a different redirect URL)."
-  );
+      if (!hrUserId) {
+        const to = new URL(returnTo, url.origin);
+        to.searchParams.set("ms_sender_status", "pending");
+        to.searchParams.set("ms_error", "hr_session_required");
+        to.searchParams.set(
+          "ms_error_description",
+          "Your Flow session cookie was not available during Microsoft connect. This is usually caused by a domain mismatch (www vs non-www or a different redirect URL)."
+        );
 
-  const res = NextResponse.redirect(to);
-  clearCookie(res, "rrs_oauth_return_to");
-  clearCookie(res, "rrs_oauth_flow");
-  clearCookie(res, "rrs_oauth_employer_id");
-  return res;
-}
+        const res = NextResponse.redirect(to);
+        clearCookie(res, "rrs_oauth_return_to");
+        clearCookie(res, "rrs_oauth_flow");
+        clearCookie(res, "rrs_oauth_employer_id");
+        return res;
+      }
+
       if (!employerId) {
         const to = new URL(returnTo, url.origin);
         to.searchParams.set("ms_sender_status", "pending");
         to.searchParams.set("ms_error", "missing_employer_context");
-        return NextResponse.redirect(to);
+
+        const res = NextResponse.redirect(to);
+        clearCookie(res, "rrs_oauth_return_to");
+        clearCookie(res, "rrs_oauth_flow");
+        clearCookie(res, "rrs_oauth_employer_id");
+        return res;
       }
 
-      // Preserve refresh token if not returned (Microsoft sometimes omits)
+      // Preserve refresh token if not returned
       const { data: existing } = await supabaseServer
         .from("microsoft_accounts")
         .select("refresh_token")
@@ -271,10 +257,8 @@ export async function GET(req: Request) {
       if (!refreshToStore) {
         const to = new URL(returnTo, url.origin);
         to.searchParams.set("ms_sender_status", "pending");
-        to.searchParams.set(
-          "ms_error",
-          "missing_refresh_token"
-        );
+        to.searchParams.set("ms_error", "missing_refresh_token");
+
         const res = NextResponse.redirect(to);
         clearCookie(res, "rrs_oauth_return_to");
         clearCookie(res, "rrs_oauth_flow");
@@ -282,7 +266,6 @@ export async function GET(req: Request) {
         return res;
       }
 
-      // ✅ NOTE: removed connected_by_hr_user_id to avoid schema mismatch errors
       const { error: upErr } = await supabaseServer
         .from("microsoft_accounts")
         .upsert(
@@ -294,6 +277,9 @@ export async function GET(req: Request) {
             scope: tokens.scope ? String(tokens.scope) : null,
             status: "approved",
             employer_id: employerId,
+
+            // ✅ important for your sender selection logic
+            requested_by_hr_user_id: hrUserId,
           },
           { onConflict: "user_email,employer_id" }
         );
@@ -312,15 +298,12 @@ export async function GET(req: Request) {
     }
 
     // ----------------------------
-    // MS ADMIN FLOW (Admin only)
+    // MS ADMIN FLOW (Admin sender connect)
     // ----------------------------
     if (flow === "ms_admin") {
       const adminUserId = await getAdminUserIdFromSession(req);
       if (!adminUserId) {
-        return NextResponse.json(
-          { error: "Admin session required to connect admin sender." },
-          { status: 401 }
-        );
+        return NextResponse.json({ error: "Admin session required to connect admin sender." }, { status: 401 });
       }
 
       const { data: existing } = await supabaseServer
@@ -336,15 +319,11 @@ export async function GET(req: Request) {
 
       if (!refreshToStore) {
         return NextResponse.json(
-          {
-            error:
-              "Microsoft did not return refresh_token. Reconnect and ensure offline_access scope.",
-          },
+          { error: "Microsoft did not return refresh_token. Reconnect and ensure offline_access scope." },
           { status: 400 }
         );
       }
 
-      // ✅ NOTE: removed connected_by_admin_user_id to avoid schema mismatch errors
       const { error: upErr } = await supabaseServer
         .from("microsoft_accounts")
         .upsert(
@@ -357,7 +336,7 @@ export async function GET(req: Request) {
             status: "approved",
             employer_id: null,
           },
-          { onConflict: "user_email" }
+          { onConflict: "user_email,employer_id" }
         );
 
       if (upErr) throw new Error(upErr.message);
@@ -375,7 +354,6 @@ export async function GET(req: Request) {
     // ----------------------------
     // MS LOGIN FLOW (Admin or HR)
     // ----------------------------
-
     const email = profile.email;
 
     const { data: adminRow } = await supabaseServer
@@ -399,12 +377,9 @@ export async function GET(req: Request) {
       if (adminSessErr) throw new Error(adminSessErr.message);
 
       const res = NextResponse.redirect(new URL("/admin", url.origin));
-
       res.headers.append(
         "Set-Cookie",
-        `rrs_admin_session=${encodeURIComponent(
-          adminSessionToken
-        )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+        `rrs_admin_session=${encodeURIComponent(adminSessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
           60 * 60 * 24 * 14
         }${cookieSecureFlag()}`
       );
@@ -427,7 +402,7 @@ export async function GET(req: Request) {
     const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14);
 
     const { error: sessErr } = await supabaseServer.from("hr_sessions").insert({
-      hr_user_id: hrUser.id,
+      hr_user_id: (hrUser as any).id,
       session_token: sessionToken,
       expires_at: expires.toISOString(),
     });
@@ -435,12 +410,9 @@ export async function GET(req: Request) {
     if (sessErr) throw new Error(sessErr.message);
 
     const res = NextResponse.redirect(new URL("/hr", url.origin));
-
     res.headers.append(
       "Set-Cookie",
-      `rrs_hr_session=${encodeURIComponent(
-        sessionToken
-      )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
+      `rrs_hr_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
         60 * 60 * 24 * 14
       }${cookieSecureFlag()}`
     );
@@ -450,7 +422,30 @@ export async function GET(req: Request) {
     clearCookie(res, "rrs_oauth_employer_id");
     return res;
   } catch (err: any) {
-    const to = new URL("/login", new URL(req.url).origin);
+    // ✅ IMPORTANT: do NOT kick HR sender-connect back to /login
+    const url = new URL(req.url);
+
+    const rawFlow = (getCookie(req, "rrs_oauth_flow") || "ms_login").toLowerCase();
+    const flow = rawFlow === "ms_email_sender" ? "ms_employer" : rawFlow;
+
+    const returnToCookie = getCookie(req, "rrs_oauth_return_to");
+    const defaultReturnTo = flow === "ms_admin" ? "/admin" : flow === "ms_employer" ? "/hr" : "/login";
+    const returnTo = safeReturnTo(returnToCookie || defaultReturnTo);
+
+    if (flow === "ms_employer") {
+      const to = new URL(returnTo, url.origin);
+      to.searchParams.set("ms_sender_status", "pending");
+      to.searchParams.set("ms_error", "microsoft_callback_failed");
+      to.searchParams.set("ms_error_description", err?.message || "Unknown error");
+
+      const res = NextResponse.redirect(to);
+      clearCookie(res, "rrs_oauth_return_to");
+      clearCookie(res, "rrs_oauth_flow");
+      clearCookie(res, "rrs_oauth_employer_id");
+      return res;
+    }
+
+    const to = new URL("/login", url.origin);
     to.searchParams.set("error", "microsoft_callback_failed");
     to.searchParams.set("message", err?.message || "Unknown error");
     return NextResponse.redirect(to);

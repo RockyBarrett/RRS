@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{
+    // we still accept these because old callback URLs may include them,
+    // but we will NOT use them to compute the pill anymore.
     gmail_sender_status?: string;
     gmail_sender_email?: string;
     ms_sender_status?: string;
@@ -152,18 +154,7 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
   const { id: employerId } = await params;
   const sp = (await searchParams) || {};
 
-  // ---- Sender status/email from query params (Gmail OR Microsoft) ----
-  const gmailSenderStatus = String(sp.gmail_sender_status || "").toLowerCase();
-  const gmailSenderEmail = sp.gmail_sender_email ? String(sp.gmail_sender_email) : null;
-
-  const msSenderStatus = String(sp.ms_sender_status || "").toLowerCase();
-  const msSenderEmail = sp.ms_sender_email ? String(sp.ms_sender_email) : null;
-
-  // Prefer gmail params if present, otherwise fall back to microsoft params
-  const senderStatus = gmailSenderStatus || msSenderStatus;
-  const senderEmail = gmailSenderEmail || msSenderEmail;
-
-  // Microsoft error context (optional, used for pending tooltip)
+  // Microsoft error context (optional, only used for tooltip messaging)
   const msError = sp.ms_error ? String(sp.ms_error) : null;
   const msErrorDescription = sp.ms_error_description ? String(sp.ms_error_description) : null;
 
@@ -209,7 +200,7 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
     );
   }
 
-  // Employer (✅ include sender_email)
+  // Employer
   const { data: employer, error: employerErr } = await supabaseServer
     .from("employers")
     .select("id, name, effective_date, opt_out_deadline, support_email, sender_email")
@@ -247,7 +238,7 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
     console.warn("Failed loading templates:", tplErr.message);
   }
 
-  // Employees + events (for activity + “last sent”)
+  // Employees + events
   const { data: employees } = await supabaseServer
     .from("employees")
     .select("id, first_name, last_name, email, token, opted_out_at, eligible")
@@ -271,26 +262,39 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
 
-  // ✅ Determine pill status using same rules as sending (HR-only sender per employer per HR user)
+  // ✅ Pill: DB truth only
   const { connectedEmail, reason: connectedEmailReason } = await getConnectedEmail({
     mode: "hr",
-    employerId: employerId,
+    employerId,
   });
 
-  const pillStatus: "connected" | "pending" | "none" =
-    senderStatus === "pending" ? "pending" : connectedEmail ? "connected" : "none";
+  let pillStatus: "connected" | "pending" | "none" = connectedEmail ? "connected" : "none";
+  let pillEmail: string | null = connectedEmail ?? null;
 
-  const pillEmail = senderStatus === "pending" ? senderEmail : connectedEmail;
+  // If no connected sender, show pending only if there is a real pending Microsoft row for this HR user + employer
+  if (!connectedEmail) {
+    const { data: pendingMs } = await supabaseServer
+      .from("microsoft_accounts")
+      .select("user_email, status, created_at")
+      .eq("employer_id", employerId)
+      .eq("requested_by_hr_user_id", session.hr_user_id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pendingMs?.user_email) {
+      pillStatus = "pending";
+      pillEmail = String(pendingMs.user_email).trim().toLowerCase();
+    }
+  }
 
   // Tooltip copy (NONE + PENDING)
   let pillTitle: string | undefined;
 
   if (pillStatus === "none") {
     pillTitle = connectedEmailReason || "No sender found";
-  }
-
-  if (pillStatus === "pending") {
-    // Default: Microsoft-side admin approval (NOT Flow admin)
+  } else if (pillStatus === "pending") {
     pillTitle =
       "Pending Microsoft 365 (Entra) admin approval. Your IT admin must approve email access for Flow.";
 
@@ -329,6 +333,10 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
           <ConnectEmailMenu employerId={employerId} returnTo={`/hr/employers/${employerId}`} variant="light" />
 
+         <Link href="/hr/profile" style={buttonStyle}>
+  Profile
+</Link> 
+
           <a href={`/hr/employers/${employerId}/compliance`} style={buttonStyle} title="(Admin route for now)">
             Compliance
           </a>
@@ -345,9 +353,11 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
           <div style={{ ...subtleText, fontSize: 13, marginTop: 10, lineHeight: 1.6 }}>
             <span style={{ fontWeight: 800, color: "#111827" }}>Effective:</span> {fmtDate(employer.effective_date)}
             {"  "}·{"  "}
-            <span style={{ fontWeight: 800, color: "#111827" }}>Opt-out deadline:</span> {fmtDate(employer.opt_out_deadline)}
+            <span style={{ fontWeight: 800, color: "#111827" }}>Opt-out deadline:</span>{" "}
+            {fmtDate(employer.opt_out_deadline)}
             {"  "}·{"  "}
-            <span style={{ fontWeight: 800, color: "#111827" }}>Support:</span> {String(employer.support_email || "")}
+            <span style={{ fontWeight: 800, color: "#111827" }}>Support:</span>{" "}
+            {String(employer.support_email || "")}
           </div>
         </div>
       </div>

@@ -173,70 +173,38 @@ export async function GET(req: Request) {
     if (flow === "gmail_employer") {
       const hrUserId = await getHrUserIdFromSession(req);
       if (!hrUserId) {
-        return NextResponse.json({ error: "HR session required to connect employer sender." }, { status: 401 });
+        return NextResponse.json(
+          { error: "HR session required to connect employer sender." },
+          { status: 401 }
+        );
       }
 
       const employerId = employerIdCookie ? String(employerIdCookie) : null;
       if (!employerId) {
-        return NextResponse.json({ error: "Missing employer context for employer sender connect." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Missing employer context for employer sender connect." },
+          { status: 400 }
+        );
       }
 
       // hard guard: HR can never connect the admin system email
       if (adminSystemEmail && email === adminSystemEmail) {
         return NextResponse.json(
-          { error: "This email is reserved for Admin system sending and cannot be connected as an employer sender." },
+          {
+            error:
+              "This email is reserved for Admin system sending and cannot be connected as an employer sender.",
+          },
           { status: 403 }
         );
       }
 
-      // If sender already approved for this (email, employer) allow; otherwise mark pending and redirect
-      const { data: existing } = await supabaseServer
-        .from("gmail_accounts")
-        .select("status")
-        .eq("user_email", email)
-        .eq("employer_id", employerId)
-        .maybeSingle();
-
-      if (existing?.status !== "approved") {
-        await updateThenInsertGmailAccount(
-          { user_email: email, employer_id: employerId },
-          {
-            status: "pending",
-            requested_by_hr_user_id: hrUserId,
-            connected_by_hr_user_id: hrUserId,
-            scope: "https://www.googleapis.com/auth/gmail.send openid https://www.googleapis.com/auth/userinfo.email",
-            access_token: null,
-            refresh_token: null,
-            expires_at: null,
-          }
-        );
-
-        const redirectUrl = new URL(returnTo, req.url);
-        redirectUrl.searchParams.set("gmail_sender_status", "pending");
-        redirectUrl.searchParams.set("gmail_sender_email", email);
-
-        const res = NextResponse.redirect(redirectUrl);
-        clearCookie(res, "rrs_oauth_return_to");
-        clearCookie(res, "rrs_oauth_flow");
-        clearCookie(res, "rrs_oauth_employer_id");
-        return res;
-      }
-
-      // approved: store/update tokens (never wipe refresh_token if missing)
-      const { data: priorRow } = await supabaseServer
-        .from("gmail_accounts")
-        .select("refresh_token")
-        .eq("user_email", email)
-        .eq("employer_id", employerId)
-        .maybeSingle();
-
-      const refreshToStore =
-        (tokens.refresh_token && String(tokens.refresh_token).trim()) ||
-        (priorRow?.refresh_token ? String((priorRow as any).refresh_token) : null);
-
+      const refreshToStore = tokens.refresh_token ? String(tokens.refresh_token).trim() : "";
       if (!refreshToStore) {
         return NextResponse.json(
-          { error: "Google did not return refresh_token. Remove app access then reconnect with prompt=consent." },
+          {
+            error:
+              "Google did not return refresh_token. Ensure Google auth URL uses access_type=offline & prompt=consent, then reconnect.",
+          },
           { status: 400 }
         );
       }
@@ -254,18 +222,17 @@ export async function GET(req: Request) {
         }
       );
 
-      // optionally set employers.sender_email for UI display (not relied on for auth)
       await supabaseServer.from("employers").update({ sender_email: email }).eq("id", employerId);
 
       const redirectUrl = new URL(returnTo, req.url);
       redirectUrl.searchParams.set("gmail_sender_status", "approved");
       redirectUrl.searchParams.set("gmail_sender_email", email);
 
-      const res = NextResponse.redirect(redirectUrl);
-      clearCookie(res, "rrs_oauth_return_to");
-      clearCookie(res, "rrs_oauth_flow");
-      clearCookie(res, "rrs_oauth_employer_id");
-      return res;
+      const resEmployer = NextResponse.redirect(redirectUrl);
+      clearCookie(resEmployer, "rrs_oauth_return_to");
+      clearCookie(resEmployer, "rrs_oauth_flow");
+      clearCookie(resEmployer, "rrs_oauth_employer_id");
+      return resEmployer;
     }
 
     // ----------------------------
@@ -277,26 +244,34 @@ export async function GET(req: Request) {
         redirectUrl.searchParams.set("gmail_sender_status", "pending");
         redirectUrl.searchParams.set("gmail_sender_email", email);
         redirectUrl.searchParams.set("gmail_sender_note", "Not authorized to connect Admin System Gmail.");
-        const res = NextResponse.redirect(redirectUrl);
-        clearCookie(res, "rrs_oauth_return_to");
-        clearCookie(res, "rrs_oauth_flow");
-        return res;
+
+        const resAdminNotAllowed = NextResponse.redirect(redirectUrl);
+        clearCookie(resAdminNotAllowed, "rrs_oauth_return_to");
+        clearCookie(resAdminNotAllowed, "rrs_oauth_flow");
+        return resAdminNotAllowed;
       }
 
       const adminUserId = await getAdminUserIdFromSession(req);
       if (!adminUserId) {
-        return NextResponse.json({ error: "Admin session required to connect admin sender." }, { status: 401 });
+        return NextResponse.json(
+          { error: "Admin session required to connect admin sender." },
+          { status: 401 }
+        );
       }
 
       if (adminSystemEmail && email !== adminSystemEmail) {
         const redirectUrl = new URL(returnTo, req.url);
         redirectUrl.searchParams.set("gmail_sender_status", "pending");
         redirectUrl.searchParams.set("gmail_sender_email", email);
-        redirectUrl.searchParams.set("gmail_sender_note", "This email is not the configured ADMIN_SENDER_EMAIL.");
-        const res = NextResponse.redirect(redirectUrl);
-        clearCookie(res, "rrs_oauth_return_to");
-        clearCookie(res, "rrs_oauth_flow");
-        return res;
+        redirectUrl.searchParams.set(
+          "gmail_sender_note",
+          "This email is not the configured ADMIN_SENDER_EMAIL."
+        );
+
+        const resAdminWrongEmail = NextResponse.redirect(redirectUrl);
+        clearCookie(resAdminWrongEmail, "rrs_oauth_return_to");
+        clearCookie(resAdminWrongEmail, "rrs_oauth_flow");
+        return resAdminWrongEmail;
       }
 
       const { data: priorRow } = await supabaseServer
@@ -308,11 +283,14 @@ export async function GET(req: Request) {
 
       const refreshToStore =
         (tokens.refresh_token && String(tokens.refresh_token).trim()) ||
-        (priorRow?.refresh_token ? String((priorRow as any).refresh_token) : null);
+        (priorRow?.refresh_token ? String((priorRow as any).refresh_token) : "");
 
       if (!refreshToStore) {
         return NextResponse.json(
-          { error: "Google did not return refresh_token. Remove app access then reconnect with prompt=consent." },
+          {
+            error:
+              "Google did not return refresh_token. Remove app access then reconnect with prompt=consent.",
+          },
           { status: 400 }
         );
       }
@@ -333,10 +311,10 @@ export async function GET(req: Request) {
       redirectUrl.searchParams.set("gmail_sender_status", "approved");
       redirectUrl.searchParams.set("gmail_sender_email", email);
 
-      const res = NextResponse.redirect(redirectUrl);
-      clearCookie(res, "rrs_oauth_return_to");
-      clearCookie(res, "rrs_oauth_flow");
-      return res;
+      const resAdminConnect = NextResponse.redirect(redirectUrl);
+      clearCookie(resAdminConnect, "rrs_oauth_return_to");
+      clearCookie(resAdminConnect, "rrs_oauth_flow");
+      return resAdminConnect;
     }
 
     // ----------------------------
@@ -352,20 +330,25 @@ export async function GET(req: Request) {
         expires_at: expires.toISOString(),
       });
 
-      if (adminSessErr) return NextResponse.json({ error: adminSessErr.message }, { status: 500 });
+      if (adminSessErr) {
+        return NextResponse.json(
+          { error: String((adminSessErr as any).message || adminSessErr) },
+          { status: 500 }
+        );
+      }
 
-      const res = NextResponse.redirect(new URL("/admin", req.url));
-      res.headers.append(
+      const resLoginAdmin = NextResponse.redirect(new URL("/admin", req.url));
+      resLoginAdmin.headers.append(
         "Set-Cookie",
         `rrs_admin_session=${encodeURIComponent(adminSessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
           60 * 60 * 24 * 14
         }${cookieSecureFlag()}`
       );
 
-      clearCookie(res, "rrs_oauth_return_to");
-      clearCookie(res, "rrs_oauth_flow");
-      clearCookie(res, "rrs_oauth_employer_id");
-      return res;
+      clearCookie(resLoginAdmin, "rrs_oauth_return_to");
+      clearCookie(resLoginAdmin, "rrs_oauth_flow");
+      clearCookie(resLoginAdmin, "rrs_oauth_employer_id");
+      return resLoginAdmin;
     }
 
     const { data: hrUser, error: hrErr } = await supabaseServer
@@ -374,8 +357,11 @@ export async function GET(req: Request) {
       .select("id, email")
       .single();
 
-    if (hrErr || !hrUser) {
-      return NextResponse.json({ error: hrErr?.message || "Failed to create HR user" }, { status: 500 });
+    if (hrErr || !hrUser?.id) {
+      return NextResponse.json(
+        { error: String(hrErr?.message || "Failed to create HR user") },
+        { status: 500 }
+      );
     }
 
     const sessionToken = makeSessionToken();
@@ -387,21 +373,29 @@ export async function GET(req: Request) {
       expires_at: expires.toISOString(),
     });
 
-    if (sessErr) return NextResponse.json({ error: sessErr.message }, { status: 500 });
+    if (sessErr) {
+      return NextResponse.json(
+        { error: String((sessErr as any).message || sessErr) },
+        { status: 500 }
+      );
+    }
 
-    const res = NextResponse.redirect(new URL("/hr", req.url));
-    res.headers.append(
+    const resLoginHr = NextResponse.redirect(new URL("/hr", req.url));
+    resLoginHr.headers.append(
       "Set-Cookie",
       `rrs_hr_session=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${
         60 * 60 * 24 * 14
       }${cookieSecureFlag()}`
     );
 
-    clearCookie(res, "rrs_oauth_return_to");
-    clearCookie(res, "rrs_oauth_flow");
-    clearCookie(res, "rrs_oauth_employer_id");
-    return res;
+    clearCookie(resLoginHr, "rrs_oauth_return_to");
+    clearCookie(resLoginHr, "rrs_oauth_flow");
+    clearCookie(resLoginHr, "rrs_oauth_employer_id");
+    return resLoginHr;
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "OAuth callback failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "OAuth callback failed" },
+      { status: 500 }
+    );
   }
 }
