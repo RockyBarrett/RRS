@@ -57,7 +57,6 @@ export async function POST(req: Request) {
       .from("employees")
       .update({ confirm_closed_at: now })
       .eq("id", employee.id)
-      .is("confirm_closed_at", null); // prevents overwriting original timestamp
 
     if (updateError) throw updateError;
 

@@ -93,17 +93,13 @@ export default function ConfirmCloseButton({
       const json = await res.json().catch(() => ({} as any));
       if (!res.ok) throw new Error(json?.error || "Failed to confirm");
 
-      router.refresh();
-      setDone(true);
-
-      window.close();
-
-      setTimeout(() => {
-        window.location.replace(fallbackHref);
-      }, 350);
+      // ✅ go to the new confirmation page
+      window.location.assign(`/notice/${token}/confirmed`);
     } catch (e: any) {
       alert(e?.message || "Something went wrong.");
+      setBusy(false);
     } finally {
+      // Note: after successful redirect, this doesn't matter; on error it will run.
       setBusy(false);
     }
   }
