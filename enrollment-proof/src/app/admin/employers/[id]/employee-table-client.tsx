@@ -135,7 +135,7 @@ function getLifecycleStatus(e: Employee, activity: EventRow[]): StatusType {
     (e as any).confirm_closed_at ||
     !!latestEventAt(activity, "confirm_closed") ||
     !!latestEventAt(activity, "confirm_close") ||
-    !!latestEventAt(activity, "confirmed_closed")
+    !!latestEventAt(activity, "acknowledged_closed")
   ) {
     return "confirmed";
   }
@@ -295,6 +295,11 @@ const [previewBody, setPreviewBody] = useState("");
 const [previewEditMode, setPreviewEditMode] = useState(false);
 const [previewBodyHtml, setPreviewBodyHtml] = useState<string>("");
 
+type SortKey = "status" | "name" | "email" | "last_sent" | "last_opened";
+
+const [sortKey, setSortKey] = useState<SortKey>("status");
+const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
   // If templates arrive later, set defaults once
   useEffect(() => {
     if (!bulkTemplateId && (templates ?? []).length > 0) {
@@ -339,6 +344,65 @@ const [previewBodyHtml, setPreviewBodyHtml] = useState<string>("");
     const ev = arr.find((x) => x.event_type === "enrollment_notice_sent");
     return ev?.created_at ?? null;
   }
+
+  function statusRank(s: StatusType) {
+  // Ascending order (top of list first)
+  if (s === "confirmed") return 0;
+  if (s === "opened") return 1;
+  if (s === "sent") return 2;
+  if (s === "new") return 3;
+  return 4; // opted_out
+}
+
+function safeLower(v: string | null | undefined) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function tsToMs(ts: string | null | undefined) {
+  if (!ts) return 0;
+  const t = new Date(ts).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+const sortedEmployees = useMemo(() => {
+  const arr = [...(employees ?? [])];
+
+  arr.sort((a, b) => {
+    const aActivity = eventsByEmployee.get(a.id) ?? [];
+    const bActivity = eventsByEmployee.get(b.id) ?? [];
+
+    const aStatus = getLifecycleStatus(a, aActivity);
+    const bStatus = getLifecycleStatus(b, bActivity);
+
+    let cmp = 0;
+
+    if (sortKey === "status") {
+      cmp = statusRank(aStatus) - statusRank(bStatus);
+      if (cmp === 0) cmp = safeLower(a.email).localeCompare(safeLower(b.email));
+    } else if (sortKey === "name") {
+      const aName = safeLower(`${a.first_name ?? ""} ${a.last_name ?? ""}`.trim());
+      const bName = safeLower(`${b.first_name ?? ""} ${b.last_name ?? ""}`.trim());
+      cmp = aName.localeCompare(bName);
+      if (cmp === 0) cmp = safeLower(a.email).localeCompare(safeLower(b.email));
+    } else if (sortKey === "email") {
+      cmp = safeLower(a.email).localeCompare(safeLower(b.email));
+    } else if (sortKey === "last_sent") {
+      const aSent = tsToMs(getLastEnrollmentNoticeSentAt(a.id) || a.notice_sent_at || null);
+      const bSent = tsToMs(getLastEnrollmentNoticeSentAt(b.id) || b.notice_sent_at || null);
+      cmp = aSent - bSent;
+      if (cmp === 0) cmp = safeLower(a.email).localeCompare(safeLower(b.email));
+    } else if (sortKey === "last_opened") {
+      const aOpen = tsToMs(a.notice_viewed_at || latestEventAt(aActivity, "page_view"));
+      const bOpen = tsToMs(b.notice_viewed_at || latestEventAt(bActivity, "page_view"));
+      cmp = aOpen - bOpen;
+      if (cmp === 0) cmp = safeLower(a.email).localeCompare(safeLower(b.email));
+    }
+
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  return arr;
+}, [employees, eventsByEmployee, sortKey, sortDir]);
 
   const eligibleActiveEmployees = useMemo(() => {
     return (employees ?? []).filter((e) => {
@@ -759,8 +823,54 @@ function openPreviewForBulk() {
       : `Send to ${groupStats[groupChoice].count} employees`
   }
 >
-  Send by notices
+  Send notices
 </button>
+
+{/* Row 2: Sort controls */}
+<div
+  style={{
+    width: "100%",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  }}
+>
+  <select
+    value={sortKey}
+    onChange={(e) => setSortKey(e.target.value as SortKey)}
+    style={{
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid #e5e7eb",
+      background: "#ffffff",
+      fontWeight: 900,
+      fontSize: 13,
+      color: "#111827",
+      maxWidth: 220,
+    }}
+    title="Sort employees"
+  >
+    <option value="status">Sort by: Status</option>
+    <option value="name">Sort by: Name</option>
+    <option value="email">Sort by: Email</option>
+    <option value="last_sent">Sort by: Last sent</option>
+    <option value="last_opened">Sort by: Last opened</option>
+  </select>
+
+  <button
+    type="button"
+    onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+    style={{
+      ...buttonStyle,
+      fontWeight: 900,
+      padding: "10px 12px",
+    }}
+    title={`Direction: ${sortDir.toUpperCase()}`}
+  >
+    {sortDir === "asc" ? "↑" : "↓"}
+  </button>
+</div>
 
       </div>
 
@@ -778,7 +888,7 @@ function openPreviewForBulk() {
         </thead>
 
         <tbody>
-  {(employees ?? []).map((e, idx) => {
+  {(sortedEmployees ?? []).map((e, idx) => {
     const name =
       `${e.first_name ?? ""} ${e.last_name ?? ""}`.trim() || "(No name)";
 

@@ -263,36 +263,18 @@ const confirmedCount = employees
   <StatCard label="Opted out" value={optedOutCount} />
 </div>
 
-      {/* Table */}
+              {/* Table */}
       <div style={{ ...cardStyle, overflow: "hidden" }}>
-        <div
-          style={{
-            padding: 16,
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ fontWeight: 900 }}>Employees</div>
-
-          <div style={{ ...subtleText, fontSize: 13 }}>
-            Tip: Use <strong style={{ color: "#111827" }}>Details</strong> to see activity timestamps.
-          </div>
-        </div>
-
         <div style={{ overflowX: "auto" }}>
-  <EmployeeTableClient
-  employerId={id}
-  employees={(employees ?? []) as any}
-  events={(events ?? []) as any}
-  baseUrl={baseUrl}
-  employerName={String(employer.name || "")}
-  supportEmail={String(employer.support_email || "support@company.com")}
-  templates={(enrollmentTemplates ?? []) as any}
-/>
+          <EmployeeTableClient
+            employerId={id}
+            employees={(employees ?? []) as any}
+            events={(events ?? []) as any}
+            baseUrl={baseUrl}
+            employerName={String(employer.name || "")}
+            supportEmail={String(employer.support_email || "support@company.com")}
+            templates={(enrollmentTemplates ?? []) as any}
+          />
         </div>
       </div>
     </main>
