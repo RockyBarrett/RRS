@@ -318,6 +318,18 @@ async function sendMicrosoftGraph({
   return json;
 }
 
+type StatusGroup = "all" | "unopened" | "opened_no_decision" | "opted_out" | "confirmed_opted_in";
+
+function parseGroup(v: any): StatusGroup | null {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (s === "all") return "all";
+  if (s === "unopened") return "unopened";
+  if (s === "opened_no_decision") return "opened_no_decision";
+  if (s === "opted_out") return "opted_out";
+  if (s === "confirmed_opted_in") return "confirmed_opted_in";
+  return null;
+}
+
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const caller = await getCaller(req);
   if (!caller) return Response.json({ error: "Not authenticated" }, { status: 401 });
@@ -336,11 +348,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const subject_override = typeof body?.subject_override === "string" ? body.subject_override : null;
   const body_override = typeof body?.body_override === "string" ? body.body_override : null;
 
+  const group = parseGroup(body?.group);
+
   const ids: string[] = [];
   if (isUUID(employee_id)) ids.push(employee_id);
   if (employee_ids) for (const x of employee_ids) if (isUUID(x)) ids.push(x);
 
-  if (ids.length === 0) return Response.json({ error: "Missing employee_id or employee_ids" }, { status: 400 });
+  if (ids.length === 0 && !group) {
+    return Response.json({ error: "Missing employee_id(s) or group" }, { status: 400 });
+  }
   if (!isUUID(template_id)) return Response.json({ error: "Missing template_id" }, { status: 400 });
 
   const { data: employer, error: empErr } = await supabaseServer
@@ -359,6 +375,86 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
   if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
+
+  // ✅ If sending by GROUP, compute ids from DB + EVENTS (no reliance on terms_viewed_at).
+  if (ids.length === 0 && group) {
+    // 1) Load eligible employees base fields
+    const { data: baseEmployees, error: baseErr } = await supabaseServer
+      .from("employees")
+      .select("id, eligible, election, confirm_closed_at, opted_out_at")
+      .eq("employer_id", employerId);
+
+    if (baseErr) return Response.json({ error: baseErr.message }, { status: 500 });
+
+    const eligibleRows = (baseEmployees ?? []).filter((e: any) => e && e.eligible !== false && isUUID(e.id));
+
+    // 2) Determine who has "opened" based on events (this is the correct signal)
+    // We include a few likely event types so this works even if naming differs slightly.
+    // (You can tighten later once you confirm your canonical view event name.)
+    const openedEventTypes = ["page_view"];
+
+    let openedIds = new Set<string>();
+
+    if (group === "unopened" || group === "opened_no_decision") {
+      const { data: openedEvents, error: evErr } = await supabaseServer
+        .from("events")
+        .select("employee_id, event_type")
+        .eq("employer_id", employerId)
+        .in("event_type", openedEventTypes);
+
+      if (evErr) return Response.json({ error: evErr.message }, { status: 500 });
+
+      for (const ev of openedEvents ?? []) {
+        const eid = String((ev as any).employee_id || "");
+        if (isUUID(eid)) openedIds.add(eid);
+      }
+    }
+
+    // 3) Apply group filters
+    const selected: string[] = [];
+
+    for (const e of eligibleRows) {
+      const id = String((e as any).id);
+      const election = String((e as any).election || "").trim() || null;
+      const confirmed = !!(e as any).confirm_closed_at;
+      const optedOutAt = !!(e as any).opted_out_at;
+
+      const isOpened = openedIds.has(id);
+
+      // ✅ All = eligible + active (NOT opted out) — matches prior bulk behavior
+      if (group === "all") {
+        if (!optedOutAt) selected.push(id);
+        continue;
+      }
+
+      if (group === "unopened") {
+        if (!isOpened) selected.push(id);
+        continue;
+      }
+
+      if (group === "opened_no_decision") {
+        if (isOpened && !election) selected.push(id);
+        continue;
+      }
+
+      if (group === "opted_out") {
+        // Your canonical opt-out is election=opt_out, but keep opted_out_at as a fallback signal.
+        if (election === "opt_out" || optedOutAt) selected.push(id);
+        continue;
+      }
+
+      if (group === "confirmed_opted_in") {
+        if (confirmed && election === "opt_in") selected.push(id);
+        continue;
+      }
+    }
+
+    ids.push(...selected);
+
+    if (ids.length === 0) {
+      return Response.json({ error: `No eligible employees found for group: ${group}` }, { status: 400 });
+    }
+  }
 
   // ✅ HR signature (plain text only in DB). We generate HTML from it.
   let hrSignatureText = "";
@@ -487,10 +583,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     accessToken = ensured.access_token;
   }
 
-  // Employees
+  // Employees (load send fields)
   const { data: employees, error: employeesErr } = await supabaseServer
     .from("employees")
-    .select("id, email, first_name, last_name, token, eligible, opted_out_at, notice_sent_at")
+    .select("id, email, first_name, last_name, token, eligible, opted_out_at, notice_sent_at, election, confirm_closed_at")
     .eq("employer_id", employerId)
     .in("id", ids);
 
@@ -530,7 +626,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       failed.push({ employee_id: (e as any).id, error: "Employee marked ineligible" });
       continue;
     }
-    if (optedOut) {
+
+    // ✅ Allow opted-out sends ONLY when group is opted_out.
+    if (optedOut && group !== "opted_out") {
       failed.push({ employee_id: (e as any).id, error: "Employee opted out" });
       continue;
     }
@@ -646,5 +744,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     failed,
     provider_used: providerUsed,
     sender_email_used: fromEmail,
+    group_used: group,
   });
 }

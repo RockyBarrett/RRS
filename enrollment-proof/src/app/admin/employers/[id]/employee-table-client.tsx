@@ -39,7 +39,7 @@ type TemplateRow = {
   body_html?: string | null; // ✅ rich html
 };
 
-type StatusType = "new" | "sent" | "opened" | "acknowledged" | "opted_out";
+type StatusType = "new" | "sent" | "opened" | "confirmed" | "opted_out";
 
 function StatusPill({ status }: { status: StatusType }) {
   const cfg: Record<
@@ -49,7 +49,7 @@ function StatusPill({ status }: { status: StatusType }) {
     new: { label: "New", bg: "#f9fafb", border: "#e5e7eb", text: "#374151" },
     sent: { label: "Sent", bg: "#eff6ff", border: "#bfdbfe", text: "#1d4ed8" },
     opened: { label: "Opened", bg: "#dbeafe", border: "#93c5fd", text: "#1d4ed8" },
-    acknowledged: { label: "Acknowledged", bg: "#ecfdf5", border: "#a7f3d0", text: "#065f46" },
+    confirmed: { label: "Confirmed", bg: "#ecfdf5", border: "#a7f3d0", text: "#065f46" },
     opted_out: { label: "Opted out", bg: "#fff7ed", border: "#fed7aa", text: "#9a3412" },
   };
 
@@ -135,9 +135,9 @@ function getLifecycleStatus(e: Employee, activity: EventRow[]): StatusType {
     (e as any).confirm_closed_at ||
     !!latestEventAt(activity, "confirm_closed") ||
     !!latestEventAt(activity, "confirm_close") ||
-    !!latestEventAt(activity, "acknowledged_closed")
+    !!latestEventAt(activity, "confirmed_closed")
   ) {
-    return "acknowledged";
+    return "confirmed";
   }
 
   // ✅ Opened
@@ -348,6 +348,130 @@ const [previewBodyHtml, setPreviewBodyHtml] = useState<string>("");
       return eligible && active && hasBasics;
     });
   }, [employees]);
+
+type SendGroup = "all" | "unopened" | "opened_no_decision" | "opted_out" | "confirmed_opted_in";
+
+const [groupOpen, setGroupOpen] = useState(false);
+const [groupBusy, setGroupBusy] = useState(false);
+const [groupChoice, setGroupChoice] = useState<SendGroup>("unopened");
+
+function groupLabel(g: SendGroup) {
+  if (g === "all") return "All employees";
+  if (g === "unopened") return "Unopened (sent, not opened)";
+  if (g === "opened_no_decision") return "Opened, no decision";
+  if (g === "opted_out") return "Opted out";
+  return "Confirmed / Opted in";
+}
+
+function matchesGroup(status: StatusType, g: SendGroup) {
+  if (g === "all") return true;
+  if (g === "unopened") return status === "sent";
+  if (g === "opened_no_decision") return status === "opened";
+  if (g === "opted_out") return status === "opted_out";
+  return status === "confirmed";
+}
+
+function openPreviewForGroup(g: SendGroup) {
+  const ids = groupStats[g]?.ids ?? [];
+  if (ids.length === 0) {
+    setToast("No employees in this group.");
+    return;
+  }
+
+  const t = getTemplateById(bulkTemplateId);
+  if (!t) {
+    setToast("Select a template first.");
+    return;
+  }
+
+  const sample =
+    (employees ?? []).find((x: Employee) => x.id === ids[0]) || (employees ?? [])[0];
+
+  if (!sample) {
+    setToast("No employees found.");
+    return;
+  }
+
+  setPreviewTitle(`Preview: ${t.name} → ${groupLabel(g)} (${ids.length})`);
+
+  setPreviewTo(
+    (employees ?? [])
+      .filter((x: Employee) => ids.includes(x.id))
+      .map((x: Employee) => x.email)
+  );
+
+  setPreviewEmployeeIds(ids);
+  setPreviewTemplateId(bulkTemplateId);
+
+  setPreviewSubject(applyVars(t.subject ?? "", sample));
+
+  const text =
+    applyVars((t.body ?? "") as string, sample) +
+    `\n\n---\nPreview shown using ${sample.email}. Each employee receives their own personalized version.`;
+
+  setPreviewBody(text);
+
+  const html = applyVars(String(t.body_html ?? ""), sample);
+  setPreviewBodyHtml(html);
+
+  setPreviewOpen(true);
+}
+
+const groupStats = useMemo(() => {
+  const result: Record<SendGroup, { count: number; ids: string[] }> = {
+    all: { count: 0, ids: [] },
+    unopened: { count: 0, ids: [] },
+    opened_no_decision: { count: 0, ids: [] },
+    opted_out: { count: 0, ids: [] },
+    confirmed_opted_in: { count: 0, ids: [] },
+  };
+
+  for (const e of employees ?? []) {
+    const activity = eventsByEmployee.get(e.id) ?? [];
+    const status = getLifecycleStatus(e, activity);
+
+    (Object.keys(result) as SendGroup[]).forEach((g) => {
+      if (matchesGroup(status, g)) {
+        result[g].count += 1;
+        result[g].ids.push(e.id);
+      }
+    });
+  }
+
+  return result;
+}, [employees, eventsByEmployee]);
+
+async function sendByGroup(g: SendGroup) {
+  if (!bulkTemplateId) {
+    setToast("Select a template first.");
+    return;
+  }
+
+  setGroupBusy(true);
+  setToast(null);
+
+  try {
+    const res = await fetch(`/api/admin/employers/${employerId}/enrollment/send`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ template_id: bulkTemplateId, group: g }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Send failed");
+
+    const attempted = Number(data?.attempted ?? groupStats[g].count);
+    const sent = Number(data?.sent ?? 0);
+
+    setToast(`${groupLabel(g)}: ${sent}/${attempted} sent.`);
+    setGroupOpen(false);
+    router.refresh();
+  } catch (e: any) {
+    setToast(e?.message || "Send failed.");
+  } finally {
+    setGroupBusy(false);
+  }
+}
 
   async function sendEnrollmentNotice(employeeId: string, templateId: string) {
     setSendingId(employeeId);
@@ -567,36 +691,77 @@ function openPreviewForBulk() {
           )}
         </select>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            onClick={openPreviewForBulk}
-            disabled={!bulkTemplateId || eligibleActiveEmployees.length === 0}
-            style={{
-              ...buttonStyle,
-              fontWeight: 900,
-              opacity: !bulkTemplateId || eligibleActiveEmployees.length === 0 ? 0.55 : 1,
-              cursor: !bulkTemplateId || eligibleActiveEmployees.length === 0 ? "not-allowed" : "pointer",
-              padding: "10px 14px",
-            }}
-            title={!bulkTemplateId ? "Select a template first" : "Preview bulk email"}
-          >
-            Preview bulk
-          </button>
+        <select
+  value={groupChoice}
+  onChange={(e) => setGroupChoice(e.target.value as any)}
+  style={{
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
+    fontWeight: 900,
+    fontSize: 13,
+    color: "#111827",
+    maxWidth: 220,
+  }}
+  title="Choose a status group"
+>
+  <option value="all">All employees</option>
+  <option value="unopened">Unopened</option>
+  <option value="opened_no_decision">Opened, no decision</option>
+  <option value="opted_out">Opted out</option>
+  <option value="confirmed_opted_in">Confirmed / Opted in</option>
+</select>
 
-          <button
-            onClick={() => setBulkOpen(true)}
-            disabled={!bulkTemplateId || eligibleActiveEmployees.length === 0}
-            style={{
-              ...buttonPrimaryStyle,
-              opacity: !bulkTemplateId || eligibleActiveEmployees.length === 0 ? 0.55 : 1,
-              cursor: !bulkTemplateId || eligibleActiveEmployees.length === 0 ? "not-allowed" : "pointer",
-              padding: "10px 14px",
-            }}
-            title={!bulkTemplateId ? "Select a template first" : "Send to all eligible active employees"}
-          >
-            Send notices (bulk)
-          </button>
-        </div>
+<button
+  onClick={() => {
+    const ids = groupStats[groupChoice]?.ids ?? [];
+    if (ids.length === 0) {
+      setToast("No employees in this group.");
+      return;
+    }
+    // Reuse existing preview modal, but preview the selected group
+    openPreviewForGroup(groupChoice);
+  }}
+  disabled={!bulkTemplateId || (groupStats[groupChoice]?.count ?? 0) === 0}
+  style={{
+    ...buttonStyle,
+    fontWeight: 900,
+    opacity: !bulkTemplateId || (groupStats[groupChoice]?.count ?? 0) === 0 ? 0.55 : 1,
+    cursor: !bulkTemplateId || (groupStats[groupChoice]?.count ?? 0) === 0 ? "not-allowed" : "pointer",
+    padding: "10px 14px",
+  }}
+  title={
+    !bulkTemplateId
+      ? "Select a template first"
+      : (groupStats[groupChoice]?.count ?? 0) === 0
+      ? "No employees in this group"
+      : `Preview for ${groupStats[groupChoice]?.count ?? 0} employees`
+  }
+>
+  Preview
+</button>
+
+<button
+  onClick={() => setGroupOpen(true)}
+  disabled={!bulkTemplateId || groupStats[groupChoice].count === 0}
+  style={{
+    ...buttonPrimaryStyle,
+    opacity: !bulkTemplateId || groupStats[groupChoice].count === 0 ? 0.55 : 1,
+    cursor: !bulkTemplateId || groupStats[groupChoice].count === 0 ? "not-allowed" : "pointer",
+    padding: "10px 14px",
+  }}
+  title={
+    !bulkTemplateId
+      ? "Select a template first"
+      : groupStats[groupChoice].count === 0
+      ? "No employees in this group"
+      : `Send to ${groupStats[groupChoice].count} employees`
+  }
+>
+  Send by notices
+</button>
+
       </div>
 
             {/* Table */}
@@ -1096,6 +1261,54 @@ function openPreviewForBulk() {
     </div>
   </div>
 </Modal>
+
+<Modal
+  open={groupOpen}
+  title="Send by status group?"
+  onClose={() => (groupBusy ? null : setGroupOpen(false))}
+>
+  <div style={{ display: "grid", gap: 10 }}>
+    <div style={{ ...subtleText, lineHeight: 1.6 }}>
+      You’re about to send the selected template to{" "}
+      <strong style={{ color: "#111827" }}>{groupStats[groupChoice].count}</strong> employee(s) in{" "}
+      <strong style={{ color: "#111827" }}>{groupLabel(groupChoice)}</strong>.
+    </div>
+
+    <div style={{ ...subtleText, fontSize: 13 }}>
+      Template:{" "}
+      <strong style={{ color: "#111827" }}>
+        {(templates ?? []).find((t) => t.id === bulkTemplateId)?.name ?? "Selected template"}
+      </strong>
+    </div>
+
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+      <button
+        onClick={() => setGroupOpen(false)}
+        disabled={groupBusy}
+        style={{
+          ...buttonStyle,
+          opacity: groupBusy ? 0.6 : 1,
+          cursor: groupBusy ? "not-allowed" : "pointer",
+        }}
+      >
+        Cancel
+      </button>
+
+      <button
+        onClick={() => sendByGroup(groupChoice)}
+        disabled={groupBusy || groupStats[groupChoice].count === 0 || !bulkTemplateId}
+        style={{
+          ...buttonPrimaryStyle,
+          opacity: groupBusy || groupStats[groupChoice].count === 0 || !bulkTemplateId ? 0.6 : 1,
+          cursor: groupBusy || groupStats[groupChoice].count === 0 ? "not-allowed" : "pointer",
+        }}
+      >
+        {groupBusy ? "Sending…" : "Send now"}
+      </button>
+    </div>
+  </div>
+</Modal>
+
     </div>
   );
 }

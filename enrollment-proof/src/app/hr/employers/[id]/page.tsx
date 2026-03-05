@@ -240,10 +240,10 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
   // Employees + events
   const { data: employees } = await supabaseServer
-    .from("employees")
-    .select("id, first_name, last_name, email, token, opted_out_at, eligible")
-    .eq("employer_id", employerId)
-    .order("email", { ascending: true });
+  .from("employees")
+  .select("id, first_name, last_name, email, token, opted_out_at, eligible, confirm_closed_at, election")
+  .eq("employer_id", employerId)
+  .order("email", { ascending: true });
 
   const { data: events } = await supabaseServer
     .from("events")
@@ -259,6 +259,20 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
   const viewedCount = employees ? employees.filter((e: any) => viewedSet.has(e.id)).length : 0;
   const optedOutCount = employees ? employees.filter((e: any) => !!e.opted_out_at).length : 0;
+  const confirmedSet = new Set(
+  (events ?? [])
+    .filter(
+      (ev: any) =>
+        ev.event_type === "confirm_closed" ||
+        ev.event_type === "confirm_close" ||
+        ev.event_type === "confirmed_closed"
+    )
+    .map((ev: any) => ev.employee_id)
+);
+
+const confirmedCount = employees
+  ? employees.filter((e: any) => confirmedSet.has(e.id) && !e.opted_out_at).length
+  : 0;
 
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
 
@@ -364,10 +378,11 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
       {/* KPIs */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "12px 0 18px 0" }}>
-        <StatCard label="Employees" value={employeeCount} />
-        <StatCard label="Viewed" value={viewedCount} />
-        <StatCard label="Opted out" value={optedOutCount} />
-      </div>
+  <StatCard label="Employees" value={employeeCount} />
+  <StatCard label="Viewed" value={viewedCount} />
+  <StatCard label="Confirmed" value={confirmedCount} />
+  <StatCard label="Opted out" value={optedOutCount} />
+</div>
 
       {/* Table */}
       <div style={{ ...cardStyle, overflow: "hidden" }}>
