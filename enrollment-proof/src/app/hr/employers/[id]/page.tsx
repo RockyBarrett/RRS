@@ -227,12 +227,12 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
   }
 
   // ✅ Templates (EmployeeTableClient requires this prop)
-  const { data: templates, error: tplErr } = await supabaseServer
+    const { data: templates, error: tplErr } = await supabaseServer
     .from("email_templates")
-    .select("id, name, subject, body, category, is_active, created_at")
+    .select("id, name, subject, body, body_text, body_html, category, is_active, created_at, updated_at")
     .eq("category", "enrollment")
     .eq("is_active", true)
-    .order("created_at", { ascending: true });
+    .order("updated_at", { ascending: false });
 
   if (tplErr) {
     console.warn("Failed loading templates:", tplErr.message);
@@ -404,9 +404,12 @@ const confirmedCount = employees
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <EmployeeTableClient
+                    <EmployeeTableClient
             employerId={employerId}
             employerName={String(employer.name || "")}
+            supportEmail={String(employer.support_email || "support@company.com")}
+            effectiveDate={String(employer.effective_date || "")}
+            optOutDeadline={String(employer.opt_out_deadline || "")}
             employees={(employees ?? []) as any}
             events={(events ?? []) as any}
             baseUrl={baseUrl}

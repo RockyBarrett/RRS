@@ -256,6 +256,8 @@ export default function EmployeeTableClient({
   employerId,
   employerName = "Employer",
   supportEmail = "support@company.com",
+  effectiveDate = "",
+  optOutDeadline = "",
   employees,
   events,
   baseUrl,
@@ -264,6 +266,8 @@ export default function EmployeeTableClient({
   employerId: string;
   employerName?: string;
   supportEmail?: string;
+  effectiveDate?: string;
+  optOutDeadline?: string;
   employees: Employee[];
   events: EventRow[];
   baseUrl: string;
@@ -636,13 +640,13 @@ function getTemplateById(id: string) {
     .replaceAll("{{employer.name}}", employerName)
     .replaceAll("{{employer.support_email}}", supportEmail)
 
-    // ✅ Backwards-compatible raw link
+    // Program variables
+    .replaceAll("{{program.effective_date}}", effectiveDate || "")
+    .replaceAll("{{program.opt_out_deadline}}", optOutDeadline || "")
+
+    // Notice links
     .replaceAll("{{links.notice}}", noticeLink)
-
-    // ✅ Explicit raw link option (recommended for fallback blocks)
     .replaceAll("{{links.notice_url}}", noticeLink)
-
-    // ✅ Button option (recommended as primary CTA)
     .replaceAll("{{links.notice_button}}", noticeButton)
 
     .replaceAll("{{links.learn_more}}", learnMoreLink);
