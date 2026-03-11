@@ -25,6 +25,12 @@ function getCookie(req: Request, name: string) {
   return hit ? decodeURIComponent(hit.split("=").slice(1).join("=")) : null;
 }
 
+function isInternalSmartSend(req: Request) {
+  const secret = req.headers.get("x-smart-send-secret");
+  const expected = process.env.SMART_SEND_CRON_SECRET;
+  return !!expected && secret === expected;
+}
+
 async function getCaller(
   req: Request
 ): Promise<
@@ -102,7 +108,11 @@ function fmtDateNice(dateStr: string | null | undefined) {
   if (!dateStr) return "";
   const d = new Date(`${dateStr}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return String(dateStr);
-  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(d);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(d);
 }
 
 /* ----------------------------
@@ -331,8 +341,12 @@ function parseGroup(v: any): StatusGroup | null {
 }
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const caller = await getCaller(req);
-  if (!caller) return Response.json({ error: "Not authenticated" }, { status: 401 });
+  const internalSmartSend = isInternalSmartSend(req);
+  const caller = internalSmartSend ? ({ kind: "internal" as const } as const) : await getCaller(req);
+
+  if (!caller) {
+    return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
 
   const { id: employerId } = await ctx.params;
 
@@ -345,8 +359,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const employee_ids = Array.isArray(body?.employee_ids) ? body.employee_ids : null;
   const template_id = body?.template_id;
 
-  const subject_override = typeof body?.subject_override === "string" ? body.subject_override : null;
-  const body_override = typeof body?.body_override === "string" ? body.body_override : null;
+  const subject_override =
+    typeof body?.subject_override === "string" ? body.subject_override : null;
+  const body_override =
+    typeof body?.body_override === "string" ? body.body_override : null;
 
   const group = parseGroup(body?.group);
 
@@ -357,7 +373,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (ids.length === 0 && !group) {
     return Response.json({ error: "Missing employee_id(s) or group" }, { status: 400 });
   }
-  if (!isUUID(template_id)) return Response.json({ error: "Missing template_id" }, { status: 400 });
+  if (!isUUID(template_id)) {
+    return Response.json({ error: "Missing template_id" }, { status: 400 });
+  }
 
   const { data: employer, error: empErr } = await supabaseServer
     .from("employers")
@@ -365,7 +383,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .eq("id", employerId)
     .maybeSingle();
 
-  if (empErr || !employer) return Response.json({ error: "Employer not found" }, { status: 404 });
+  if (empErr || !employer) {
+    return Response.json({ error: "Employer not found" }, { status: 404 });
+  }
 
   const { data: tmpl, error: tmplErr } = await supabaseServer
     .from("email_templates")
@@ -373,12 +393,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     .eq("id", template_id)
     .maybeSingle();
 
-  if (tmplErr || !tmpl) return Response.json({ error: "Template not found" }, { status: 404 });
-  if ((tmpl as any).is_active === false) return Response.json({ error: "Template is archived" }, { status: 400 });
+  if (tmplErr || !tmpl) {
+    return Response.json({ error: "Template not found" }, { status: 404 });
+  }
+  if ((tmpl as any).is_active === false) {
+    return Response.json({ error: "Template is archived" }, { status: 400 });
+  }
 
-  // ✅ If sending by GROUP, compute ids from DB + EVENTS (no reliance on terms_viewed_at).
   if (ids.length === 0 && group) {
-    // 1) Load eligible employees base fields
     const { data: baseEmployees, error: baseErr } = await supabaseServer
       .from("employees")
       .select("id, eligible, election, confirm_closed_at, opted_out_at")
@@ -386,14 +408,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
     if (baseErr) return Response.json({ error: baseErr.message }, { status: 500 });
 
-    const eligibleRows = (baseEmployees ?? []).filter((e: any) => e && e.eligible !== false && isUUID(e.id));
+    const eligibleRows = (baseEmployees ?? []).filter(
+      (e: any) => e && e.eligible !== false && isUUID(e.id)
+    );
 
-    // 2) Determine who has "opened" based on events (this is the correct signal)
-    // We include a few likely event types so this works even if naming differs slightly.
-    // (You can tighten later once you confirm your canonical view event name.)
     const openedEventTypes = ["page_view"];
-
-    let openedIds = new Set<string>();
+    const openedIds = new Set<string>();
 
     if (group === "unopened" || group === "opened_no_decision") {
       const { data: openedEvents, error: evErr } = await supabaseServer
@@ -410,7 +430,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
     }
 
-    // 3) Apply group filters
     const selected: string[] = [];
 
     for (const e of eligibleRows) {
@@ -418,10 +437,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const election = String((e as any).election || "").trim() || null;
       const confirmed = !!(e as any).confirm_closed_at;
       const optedOutAt = !!(e as any).opted_out_at;
-
       const isOpened = openedIds.has(id);
 
-      // ✅ All = eligible + active (NOT opted out) — matches prior bulk behavior
       if (group === "all") {
         if (!optedOutAt) selected.push(id);
         continue;
@@ -438,7 +455,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       }
 
       if (group === "opted_out") {
-        // Your canonical opt-out is election=opt_out, but keep opted_out_at as a fallback signal.
         if (election === "opt_out" || optedOutAt) selected.push(id);
         continue;
       }
@@ -452,11 +468,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     ids.push(...selected);
 
     if (ids.length === 0) {
-      return Response.json({ error: `No eligible employees found for group: ${group}` }, { status: 400 });
+      return Response.json(
+        { error: `No eligible employees found for group: ${group}` },
+        { status: 400 }
+      );
     }
   }
 
-  // ✅ HR signature (plain text only in DB). We generate HTML from it.
   let hrSignatureText = "";
   let hrSignatureHtml = "";
   if (caller.kind === "hr") {
@@ -470,7 +488,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     hrSignatureHtml = renderSignatureHtmlFromText(hrSignatureText);
   }
 
-  // ✅ Sender selection (Gmail admin, HR can be Gmail OR Microsoft)
   let providerUsed: "gmail" | "microsoft" = "gmail";
   let acct: any = null;
 
@@ -496,13 +513,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     acct = data;
     providerUsed = "gmail";
   } else {
-    // 1) Try Gmail sender for this HR user
     const { data: g } = await supabaseServer
       .from("gmail_accounts")
       .select("user_email, access_token, refresh_token, expires_at, status, employer_id, connected_by_hr_user_id, created_at")
       .eq("status", "approved")
       .eq("employer_id", employerId)
-      .eq("connected_by_hr_user_id", caller.hrUserId)
       .not("refresh_token", "is", null)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -512,13 +527,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       acct = g;
       providerUsed = "gmail";
     } else {
-      // 2) Try Microsoft sender for this HR user
       const { data: m } = await supabaseServer
         .from("microsoft_accounts")
         .select("user_email, access_token, refresh_token, expires_at, status, employer_id, requested_by_hr_user_id, created_at")
         .eq("status", "approved")
         .eq("employer_id", employerId)
-        .eq("requested_by_hr_user_id", caller.hrUserId)
         .not("refresh_token", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -537,7 +550,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         error:
           caller.kind === "admin"
             ? "Admin sender not connected/approved. Connect ADMIN_SENDER_EMAIL first."
-            : "No approved sender connected for this employer by this HR user.",
+            : "No approved sender connected for this employer.",
       },
       { status: 400 }
     );
@@ -552,7 +565,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return Response.json({ error: "Sender refresh_token missing. Reconnect sender." }, { status: 400 });
   }
 
-  // ✅ Ensure valid token for chosen provider
   if (providerUsed === "gmail") {
     const expiresAtMs = new Date(expiresAtRaw).getTime();
     if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
@@ -562,19 +574,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
 
       const q = supabaseServer
-        .from("gmail_accounts")
-        .update({ access_token: accessToken, expires_at: newExpiresAt })
-        .eq("user_email", fromEmail);
+  .from("gmail_accounts")
+  .update({ access_token: accessToken, expires_at: newExpiresAt })
+  .eq("user_email", fromEmail);
 
-      if (caller.kind === "admin") q.is("employer_id", null);
-      else q.eq("employer_id", employerId);
+if (caller.kind === "admin") {
+  q.is("employer_id", null);
+} else {
+  q.eq("employer_id", employerId);
+}
 
       await q;
     }
   } else {
     const ensured = await ensureMicrosoftAccessToken({
       userEmail: fromEmail,
-      employerId: caller.kind === "admin" ? null : employerId, // ✅ IMPORTANT
+      employerId: caller.kind === "admin" ? null : employerId,
       accessToken,
       refreshToken,
       expiresAt: expiresAtRaw || null,
@@ -583,7 +598,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     accessToken = ensured.access_token;
   }
 
-  // Employees (load send fields)
   const { data: employees, error: employeesErr } = await supabaseServer
     .from("employees")
     .select("id, email, first_name, last_name, token, eligible, opted_out_at, notice_sent_at, election, confirm_closed_at")
@@ -598,7 +612,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   let sent = 0;
   const failed: Array<{ employee_id: string; error: string }> = [];
 
-  // Template channels
   const bodyTextTemplate = String((tmpl as any).body_text ?? (tmpl as any).body ?? "");
   const bodyHtmlTemplate = String((tmpl as any).body_html ?? "");
 
@@ -627,7 +640,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       continue;
     }
 
-    // ✅ Allow opted-out sends ONLY when group is opted_out.
     if (optedOut && group !== "opted_out") {
       failed.push({ employee_id: (e as any).id, error: "Employee opted out" });
       continue;
@@ -648,13 +660,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       "program.effective_date": fmtDateNice((employer as any).effective_date),
       "program.opt_out_deadline": fmtDateNice((employer as any).opt_out_deadline),
 
-      // Links
       "links.notice": noticeUrl,
       "links.notice_url": noticeUrl,
       "links.notice_button": noticeButton,
       "links.learn_more": learnMoreUrl,
 
-      // Signature (generated HTML + plain text)
       "hr.signature_html": hrSignatureHtml,
       "hr.signature_text": hrSignatureText,
     };
@@ -673,7 +683,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
             return `<div style="white-space:normal;">${escaped}</div>`;
           })();
 
-    // Auto-append signature ONLY if template didn't place it
     if (caller.kind === "hr" && !templateHasSigTokens) {
       if (hrSignatureHtml) innerHtml = `${innerHtml}<br/><br/>${hrSignatureHtml}`;
       if (hrSignatureText) finalText = `${finalText}\n\n${hrSignatureText}`;
@@ -745,5 +754,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     provider_used: providerUsed,
     sender_email_used: fromEmail,
     group_used: group,
+    internal_smart_send: internalSmartSend,
   });
 }

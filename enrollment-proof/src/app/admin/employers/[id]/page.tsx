@@ -30,10 +30,10 @@ export default async function EmployerDashboard({ params }: PageProps) {
   const { id } = await params;
 
   const { data: employer, error: employerErr } = await supabaseServer
-    .from("employers")
-    .select("id, name, effective_date, opt_out_deadline, support_email")
-    .eq("id", id)
-    .maybeSingle();
+  .from("employers")
+  .select("id, name, effective_date, opt_out_deadline, support_email, sender_email, smart_send_enabled, smart_send_started_at")
+  .eq("id", id)
+  .maybeSingle();
 
   if (employerErr || !employer) {
     return (
@@ -267,14 +267,18 @@ const confirmedCount = employees
       <div style={{ ...cardStyle, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <EmployeeTableClient
-            employerId={id}
-            employees={(employees ?? []) as any}
-            events={(events ?? []) as any}
-            baseUrl={baseUrl}
-            employerName={String(employer.name || "")}
-            supportEmail={String(employer.support_email || "support@company.com")}
-            templates={(enrollmentTemplates ?? []) as any}
-          />
+  employerId={id}
+  employees={(employees ?? []) as any}
+  events={(events ?? []) as any}
+  baseUrl={baseUrl}
+  employerName={String(employer.name || "")}
+  supportEmail={String(employer.support_email || "support@company.com")}
+  effectiveDate={String(employer.effective_date || "")}
+  optOutDeadline={String(employer.opt_out_deadline || "")}
+  templates={(enrollmentTemplates ?? []) as any}
+  smartSendEnabled={Boolean((employer as any).smart_send_enabled)}
+  smartSendStartedAt={String((employer as any).smart_send_started_at || "")}
+/>
         </div>
       </div>
     </main>

@@ -202,10 +202,10 @@ export default async function HrEmployerDashboard({ params, searchParams }: Page
 
   // Employer
   const { data: employer, error: employerErr } = await supabaseServer
-    .from("employers")
-    .select("id, name, effective_date, opt_out_deadline, support_email, sender_email")
-    .eq("id", employerId)
-    .maybeSingle();
+  .from("employers")
+  .select("id, name, effective_date, opt_out_deadline, support_email, sender_email, smart_send_enabled, smart_send_started_at")
+  .eq("id", employerId)
+  .maybeSingle();
 
   if (employerErr || !employer) {
     return (
@@ -404,17 +404,19 @@ const confirmedCount = employees
         </div>
 
         <div style={{ overflowX: "auto" }}>
-                    <EmployeeTableClient
-            employerId={employerId}
-            employerName={String(employer.name || "")}
-            supportEmail={String(employer.support_email || "support@company.com")}
-            effectiveDate={String(employer.effective_date || "")}
-            optOutDeadline={String(employer.opt_out_deadline || "")}
-            employees={(employees ?? []) as any}
-            events={(events ?? []) as any}
-            baseUrl={baseUrl}
-            templates={(templates ?? []) as any}
-          />
+  <EmployeeTableClient
+    employerId={employerId}
+    employerName={String(employer.name || "")}
+    supportEmail={String(employer.support_email || "support@company.com")}
+    effectiveDate={String(employer.effective_date || "")}
+    optOutDeadline={String(employer.opt_out_deadline || "")}
+    employees={(employees ?? []) as any}
+    events={(events ?? []) as any}
+    baseUrl={baseUrl}
+    templates={(templates ?? []) as any}
+    smartSendEnabled={Boolean((employer as any).smart_send_enabled)}
+    smartSendStartedAt={String((employer as any).smart_send_started_at || "")}
+  />
         </div>
       </div>
     </main>

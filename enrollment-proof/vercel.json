@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/jobs/smart-send",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
