@@ -55,12 +55,12 @@ function isComplete(e: EmployeeRow) {
   return !!e.confirm_closed_at;
 }
 
-function isUnsent(e: EmployeeRow) {
-  return hasBasics(e) && !e.notice_sent_at && !isComplete(e);
-}
-
 function hasOpenedNotice(e: EmployeeRow, rows: SmartEventRow[]) {
   return !!e.notice_viewed_at || rows.some((r) => r.event_type === "page_view");
+}
+
+function isUnsent(e: EmployeeRow) {
+  return hasBasics(e) && !e.notice_sent_at && !isComplete(e);
 }
 
 function isUnopened(e: EmployeeRow, rows: SmartEventRow[]) {
@@ -90,6 +90,11 @@ export async function runSmartSend(options?: {
 }) {
   const baseUrl = options?.baseUrl || process.env.APP_BASE_URL || "http://localhost:3000";
   const secret = options?.secret || process.env.SMART_SEND_CRON_SECRET || "";
+
+  if (!secret) {
+    throw new Error("SMART_SEND_CRON_SECRET is missing");
+  }
+
   const summary: any[] = [];
 
   const { data: employers, error: employersErr } = await supabaseServer
@@ -171,58 +176,61 @@ export async function runSmartSend(options?: {
     const secondDelay = Number(employer.smart_send_second_delay_hours || 48);
     const thirdDelay = Number(employer.smart_send_third_delay_hours || 72);
 
+    const startedAt = employer.smart_send_started_at;
+if (!startedAt) {
+  summary.push({
+    employerId,
+    error: "Smart Send enabled but no start time set",
+  });
+  continue;
+}
+    const secondStageReady = hoursSince(startedAt) >= secondDelay;
+    const thirdStageReady = hoursSince(startedAt) >= thirdDelay;
+
     const initialCandidates = (employees ?? []).filter((e: any) => {
       const prior = eventsByEmployee.get(e.id) ?? [];
       return isUnsent(e) && !hasEvent(prior, "smart_send_initial_sent");
     });
 
-    const secondUnopenedCandidates = (employees ?? []).filter((e: any) => {
-      const prior = eventsByEmployee.get(e.id) ?? [];
+    const secondUnopenedCandidates = secondStageReady
+      ? (employees ?? []).filter((e: any) => {
+          const prior = eventsByEmployee.get(e.id) ?? [];
+          return (
+            isUnopened(e, prior) &&
+            !hasEvent(prior, "smart_send_second_unopened_sent")
+          );
+        })
+      : [];
 
-      if (!isUnopened(e, prior)) return false;
-      if (hoursSince(e.notice_sent_at) < secondDelay) return false;
+    const secondOpenedCandidates = secondStageReady
+      ? (employees ?? []).filter((e: any) => {
+          const prior = eventsByEmployee.get(e.id) ?? [];
+          return (
+            isOpenedNoDecision(e, prior) &&
+            !hasEvent(prior, "smart_send_second_opened_sent")
+          );
+        })
+      : [];
 
-      return !hasEvent(prior, "smart_send_second_unopened_sent");
-    });
+    const thirdUnopenedCandidates = thirdStageReady
+      ? (employees ?? []).filter((e: any) => {
+          const prior = eventsByEmployee.get(e.id) ?? [];
+          return (
+            isUnopened(e, prior) &&
+            !hasEvent(prior, "smart_send_third_unopened_sent")
+          );
+        })
+      : [];
 
-    const secondOpenedCandidates = (employees ?? []).filter((e: any) => {
-      const prior = eventsByEmployee.get(e.id) ?? [];
-
-      if (!isOpenedNoDecision(e, prior)) return false;
-
-      const openedAt =
-        e.notice_viewed_at ||
-        prior.find((r) => r.event_type === "page_view")?.created_at ||
-        null;
-
-      if (hoursSince(openedAt) < secondDelay) return false;
-
-      return !hasEvent(prior, "smart_send_second_opened_sent");
-    });
-
-    const thirdUnopenedCandidates = (employees ?? []).filter((e: any) => {
-      const prior = eventsByEmployee.get(e.id) ?? [];
-
-      if (!isUnopened(e, prior)) return false;
-
-      const secondEvent = getEvent(prior, "smart_send_second_unopened_sent");
-      if (!secondEvent) return false;
-      if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
-
-      return !hasEvent(prior, "smart_send_third_unopened_sent");
-    });
-
-    const thirdOpenedCandidates = (employees ?? []).filter((e: any) => {
-      const prior = eventsByEmployee.get(e.id) ?? [];
-
-      if (!isOpenedNoDecision(e, prior)) return false;
-
-      const secondEvent = getEvent(prior, "smart_send_second_opened_sent");
-      if (!secondEvent) return false;
-      if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
-
-      return !hasEvent(prior, "smart_send_third_opened_sent");
-    });
+    const thirdOpenedCandidates = thirdStageReady
+      ? (employees ?? []).filter((e: any) => {
+          const prior = eventsByEmployee.get(e.id) ?? [];
+          return (
+            isOpenedNoDecision(e, prior) &&
+            !hasEvent(prior, "smart_send_third_opened_sent")
+          );
+        })
+      : [];
 
     async function sendStage(args: {
       templateId: string | null;
@@ -320,6 +328,9 @@ export async function runSmartSend(options?: {
 
       summary.push({
         employerId,
+        startedAt,
+        secondStageReady,
+        thirdStageReady,
         initial,
         secondUnopened,
         secondOpened,
