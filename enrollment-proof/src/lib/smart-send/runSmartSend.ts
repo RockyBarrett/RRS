@@ -63,8 +63,12 @@ function isUnopened(e: EmployeeRow) {
   return hasBasics(e) && !!e.notice_sent_at && !e.notice_viewed_at && !isComplete(e);
 }
 
-function isOpenedNoDecision(e: EmployeeRow) {
-  return hasBasics(e) && !!e.notice_viewed_at && !e.election && !isComplete(e);
+function hasOpenedNotice(e: EmployeeRow, rows: SmartEventRow[]) {
+  return !!e.notice_viewed_at || rows.some((r) => r.event_type === "page_view");
+}
+
+function isOpenedNoDecision(e: EmployeeRow, rows: SmartEventRow[]) {
+  return hasBasics(e) && hasOpenedNotice(e, rows) && !e.election && !isComplete(e);
 }
 
 function hasEvent(rows: SmartEventRow[], eventType: SendStageEvent) {
@@ -136,12 +140,13 @@ export async function runSmartSend(options?: {
         .eq("employer_id", employerId)
         .in("employee_id", employeeIds)
         .in("event_type", [
-          "smart_send_initial_sent",
-          "smart_send_second_unopened_sent",
-          "smart_send_second_opened_sent",
-          "smart_send_third_unopened_sent",
-          "smart_send_third_opened_sent",
-        ]);
+  "page_view",
+  "smart_send_initial_sent",
+  "smart_send_second_unopened_sent",
+  "smart_send_second_opened_sent",
+  "smart_send_third_unopened_sent",
+  "smart_send_third_opened_sent",
+]);
 
       if (error) {
         summary.push({ employerId, error: error.message });
@@ -175,12 +180,19 @@ export async function runSmartSend(options?: {
     });
 
     const secondOpenedCandidates = (employees ?? []).filter((e: any) => {
-      if (!isOpenedNoDecision(e)) return false;
-      if (hoursSince(e.notice_viewed_at) < secondDelay) return false;
+  const prior = eventsByEmployee.get(e.id) ?? [];
 
-      const prior = eventsByEmployee.get(e.id) ?? [];
-      return !hasEvent(prior, "smart_send_second_opened_sent");
-    });
+  if (!isOpenedNoDecision(e, prior)) return false;
+
+  const openedAt =
+    e.notice_viewed_at ||
+    prior.find((r) => r.event_type === "page_view")?.created_at ||
+    null;
+
+  if (hoursSince(openedAt) < secondDelay) return false;
+
+  return !hasEvent(prior, "smart_send_second_opened_sent");
+});
 
     const thirdUnopenedCandidates = (employees ?? []).filter((e: any) => {
       if (!isUnopened(e)) return false;
@@ -194,15 +206,16 @@ export async function runSmartSend(options?: {
     });
 
     const thirdOpenedCandidates = (employees ?? []).filter((e: any) => {
-      if (!isOpenedNoDecision(e)) return false;
+  const prior = eventsByEmployee.get(e.id) ?? [];
 
-      const prior = eventsByEmployee.get(e.id) ?? [];
-      const secondEvent = getEvent(prior, "smart_send_second_opened_sent");
-      if (!secondEvent) return false;
-      if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
+  if (!isOpenedNoDecision(e, prior)) return false;
 
-      return !hasEvent(prior, "smart_send_third_opened_sent");
-    });
+  const secondEvent = getEvent(prior, "smart_send_second_opened_sent");
+  if (!secondEvent) return false;
+  if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
+
+  return !hasEvent(prior, "smart_send_third_opened_sent");
+});
 
     async function sendStage(args: {
       templateId: string | null;
