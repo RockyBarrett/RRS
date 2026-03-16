@@ -59,12 +59,17 @@ function isUnsent(e: EmployeeRow) {
   return hasBasics(e) && !e.notice_sent_at && !isComplete(e);
 }
 
-function isUnopened(e: EmployeeRow) {
-  return hasBasics(e) && !!e.notice_sent_at && !e.notice_viewed_at && !isComplete(e);
-}
-
 function hasOpenedNotice(e: EmployeeRow, rows: SmartEventRow[]) {
   return !!e.notice_viewed_at || rows.some((r) => r.event_type === "page_view");
+}
+
+function isUnopened(e: EmployeeRow, rows: SmartEventRow[]) {
+  return (
+    hasBasics(e) &&
+    !!e.notice_sent_at &&
+    !hasOpenedNotice(e, rows) &&
+    !isComplete(e)
+  );
 }
 
 function isOpenedNoDecision(e: EmployeeRow, rows: SmartEventRow[]) {
@@ -140,13 +145,13 @@ export async function runSmartSend(options?: {
         .eq("employer_id", employerId)
         .in("employee_id", employeeIds)
         .in("event_type", [
-  "page_view",
-  "smart_send_initial_sent",
-  "smart_send_second_unopened_sent",
-  "smart_send_second_opened_sent",
-  "smart_send_third_unopened_sent",
-  "smart_send_third_opened_sent",
-]);
+          "page_view",
+          "smart_send_initial_sent",
+          "smart_send_second_unopened_sent",
+          "smart_send_second_opened_sent",
+          "smart_send_third_unopened_sent",
+          "smart_send_third_opened_sent",
+        ]);
 
       if (error) {
         summary.push({ employerId, error: error.message });
@@ -172,32 +177,34 @@ export async function runSmartSend(options?: {
     });
 
     const secondUnopenedCandidates = (employees ?? []).filter((e: any) => {
-      if (!isUnopened(e)) return false;
+      const prior = eventsByEmployee.get(e.id) ?? [];
+
+      if (!isUnopened(e, prior)) return false;
       if (hoursSince(e.notice_sent_at) < secondDelay) return false;
 
-      const prior = eventsByEmployee.get(e.id) ?? [];
       return !hasEvent(prior, "smart_send_second_unopened_sent");
     });
 
     const secondOpenedCandidates = (employees ?? []).filter((e: any) => {
-  const prior = eventsByEmployee.get(e.id) ?? [];
+      const prior = eventsByEmployee.get(e.id) ?? [];
 
-  if (!isOpenedNoDecision(e, prior)) return false;
+      if (!isOpenedNoDecision(e, prior)) return false;
 
-  const openedAt =
-    e.notice_viewed_at ||
-    prior.find((r) => r.event_type === "page_view")?.created_at ||
-    null;
+      const openedAt =
+        e.notice_viewed_at ||
+        prior.find((r) => r.event_type === "page_view")?.created_at ||
+        null;
 
-  if (hoursSince(openedAt) < secondDelay) return false;
+      if (hoursSince(openedAt) < secondDelay) return false;
 
-  return !hasEvent(prior, "smart_send_second_opened_sent");
-});
+      return !hasEvent(prior, "smart_send_second_opened_sent");
+    });
 
     const thirdUnopenedCandidates = (employees ?? []).filter((e: any) => {
-      if (!isUnopened(e)) return false;
-
       const prior = eventsByEmployee.get(e.id) ?? [];
+
+      if (!isUnopened(e, prior)) return false;
+
       const secondEvent = getEvent(prior, "smart_send_second_unopened_sent");
       if (!secondEvent) return false;
       if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
@@ -206,16 +213,16 @@ export async function runSmartSend(options?: {
     });
 
     const thirdOpenedCandidates = (employees ?? []).filter((e: any) => {
-  const prior = eventsByEmployee.get(e.id) ?? [];
+      const prior = eventsByEmployee.get(e.id) ?? [];
 
-  if (!isOpenedNoDecision(e, prior)) return false;
+      if (!isOpenedNoDecision(e, prior)) return false;
 
-  const secondEvent = getEvent(prior, "smart_send_second_opened_sent");
-  if (!secondEvent) return false;
-  if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
+      const secondEvent = getEvent(prior, "smart_send_second_opened_sent");
+      if (!secondEvent) return false;
+      if (hoursSince(secondEvent.created_at) < thirdDelay) return false;
 
-  return !hasEvent(prior, "smart_send_third_opened_sent");
-});
+      return !hasEvent(prior, "smart_send_third_opened_sent");
+    });
 
     async function sendStage(args: {
       templateId: string | null;
@@ -250,7 +257,9 @@ export async function runSmartSend(options?: {
       }
 
       const failedIds = new Set<string>(
-        Array.isArray(data?.failed) ? data.failed.map((f: any) => String(f.employee_id)) : []
+        Array.isArray(data?.failed)
+          ? data.failed.map((f: any) => String(f.employee_id))
+          : []
       );
 
       const successfulIds = ids.filter((id) => !failedIds.has(id));
