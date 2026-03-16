@@ -558,35 +558,54 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const fromEmail = String((acct as any).user_email || "").trim().toLowerCase();
   const refreshToken = String((acct as any).refresh_token || "");
-  let accessToken = String((acct as any).access_token || "");
-  const expiresAtRaw = String((acct as any).expires_at || "");
+let accessToken = String((acct as any).access_token || "");
+const expiresAtRaw = String((acct as any).expires_at || "");
 
-  if (!refreshToken) {
-    return Response.json({ error: "Sender refresh_token missing. Reconnect sender." }, { status: 400 });
-  }
-
-  if (providerUsed === "gmail") {
-    const expiresAtMs = new Date(expiresAtRaw).getTime();
-    if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
-      const refreshed = await refreshAccessToken(refreshToken);
-      accessToken = refreshed.access_token;
-
-      const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-
-      const q = supabaseServer
-  .from("gmail_accounts")
-  .update({ access_token: accessToken, expires_at: newExpiresAt })
-  .eq("user_email", fromEmail);
-
-if (caller.kind === "admin") {
-  q.is("employer_id", null);
-} else {
-  q.eq("employer_id", employerId);
+if (!refreshToken) {
+  return Response.json(
+    { error: "Sender refresh_token missing. Reconnect sender." },
+    { status: 400 }
+  );
 }
 
-      await q;
+if (providerUsed === "gmail") {
+  const expiresAtMs = new Date(expiresAtRaw).getTime();
+
+  if (!accessToken || !expiresAtMs || Date.now() > expiresAtMs - 60_000) {
+    let refreshed: { access_token: string; expires_in: number };
+
+    try {
+      refreshed = await refreshAccessToken(refreshToken);
+    } catch (err: any) {
+      return Response.json(
+        {
+          error: `Sender needs reconnect: ${fromEmail}`,
+          details: err?.message || "Refresh token expired or revoked",
+        },
+        { status: 400 }
+      );
     }
-  } else {
+
+    accessToken = refreshed.access_token;
+
+    const newExpiresAt = new Date(
+      Date.now() + refreshed.expires_in * 1000
+    ).toISOString();
+
+    const q = supabaseServer
+      .from("gmail_accounts")
+      .update({ access_token: accessToken, expires_at: newExpiresAt })
+      .eq("user_email", fromEmail);
+
+    if (caller.kind === "admin") {
+      q.is("employer_id", null);
+    } else {
+      q.eq("employer_id", employerId);
+    }
+
+    await q;
+  }
+} else {
     const ensured = await ensureMicrosoftAccessToken({
       userEmail: fromEmail,
       employerId: caller.kind === "admin" ? null : employerId,
