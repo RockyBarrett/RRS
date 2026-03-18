@@ -20,14 +20,11 @@ function normalizeBool(v: string | undefined): boolean {
 }
 
 function toCentsFromDollars(v: string | undefined): number | null | undefined {
-  // IMPORTANT:
-  // - undefined => "not provided" (preserve existing)
-  // - null => explicitly provided but invalid/empty (we'll treat empty as undefined)
   if (v === undefined) return undefined;
   const cleaned = String(v).replace(/[$,]/g, "").trim();
-  if (cleaned === "") return undefined; // blank => preserve existing
+  if (cleaned === "") return undefined;
   const n = Number(cleaned);
-  if (!Number.isFinite(n)) return undefined; // invalid => preserve existing
+  if (!Number.isFinite(n)) return undefined;
   return Math.round(n * 100);
 }
 
@@ -84,7 +81,9 @@ function parseCSV(csvText: string): Record<string, string>[] {
 
   return rows.slice(1).map((r) => {
     const obj: Record<string, string> = {};
-    headers.forEach((h, idx) => (obj[h] = (r[idx] ?? "").trim()));
+    headers.forEach((h, idx) => {
+      obj[h] = (r[idx] ?? "").trim();
+    });
     return obj;
   });
 }
@@ -110,6 +109,20 @@ type ExistingEmployee = {
   employee_ref: string | null;
   eligible: boolean;
   annual_savings_cents: number | null;
+
+  monthly_savings_cents: number | null;
+  source_status: string | null;
+  full_address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  birth_date: string | null;
+  ssn_last4: string | null;
+  has_health_insurance: string | null;
+  insurance_source: string | null;
+  gender: string | null;
+  hire_date: string | null;
+  source_row_json: Record<string, string> | null;
 };
 
 type NormalizedInput = {
@@ -121,14 +134,41 @@ type NormalizedInput = {
   phone: string | null;
   eligible: boolean;
 
-  // undefined means "not provided" (preserve existing)
   annual_savings_cents?: number | null;
+
+  monthly_savings_cents?: number | null;
+  source_status?: string | null;
+  full_address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  birth_date?: string | null;
+  ssn_last4?: string | null;
+  has_health_insurance?: string | null;
+  insurance_source?: string | null;
+  gender?: string | null;
+  hire_date?: string | null;
+
+  source_row_json: Record<string, string> | null;
 };
 
 type UpsertRow = NormalizedInput & {
   token: string;
   opted_out_at: string | null;
-  annual_savings_cents: number | null; // final value written
+
+  annual_savings_cents: number | null;
+  monthly_savings_cents: number | null;
+  source_status: string | null;
+  full_address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  birth_date: string | null;
+  ssn_last4: string | null;
+  has_health_insurance: string | null;
+  insurance_source: string | null;
+  gender: string | null;
+  hire_date: string | null;
 };
 
 export async function POST(
@@ -149,7 +189,6 @@ export async function POST(
     return Response.json({ error: "Missing csvText" }, { status: 400 });
   }
 
-  // ✅ FIX: include effective_date so plan-year sync has the value it needs
   const { data: employer, error: employerErr } = await supabaseServer
     .from("employers")
     .select("id, name, effective_date")
@@ -177,6 +216,7 @@ export async function POST(
       skipped++;
       continue;
     }
+
     if (seenEmails.has(email)) {
       skippedDuplicates++;
       continue;
@@ -186,25 +226,35 @@ export async function POST(
     const first_name =
       (r.first_name || r.FirstName || r.first || r["First Name"] || "").trim() ||
       null;
+
     const last_name =
       (r.last_name || r.LastName || r.last || r["Last Name"] || "").trim() ||
       null;
+
     const phone =
-      (r.phone || r.Phone || r.mobile || r.Mobile || "").trim() || null;
+      (
+        r.phone ||
+        r.Phone ||
+        r.mobile ||
+        r.Mobile ||
+        r["Cell Phone"] ||
+        ""
+      ).trim() || null;
 
     const employee_ref =
-      (r.employee_ref ||
+      (
+        r.employee_ref ||
         r.employee_id ||
         r.EmployeeID ||
         r["Employee ID"] ||
-        "").trim() || null;
+        ""
+      ).trim() || null;
 
     const eligible =
       r.eligible === undefined || r.eligible === ""
         ? true
         : normalizeBool(r.eligible);
 
-    // savings: preserve if not provided
     const annual_savings_cents =
       r.annual_savings_cents !== undefined && r.annual_savings_cents !== ""
         ? Number(r.annual_savings_cents)
@@ -215,6 +265,57 @@ export async function POST(
               undefined
           );
 
+    const monthly_savings_cents =
+      r.monthly_savings_cents !== undefined && r.monthly_savings_cents !== ""
+        ? Number(r.monthly_savings_cents)
+        : toCentsFromDollars(
+            r.monthly_savings ||
+              r["Monthly Savings"] ||
+              undefined
+          );
+
+    const source_status = (r.STATUS || r.status || "").trim() || null;
+
+    const full_address =
+  (
+    r["Full Address"] ||
+    r["Street Address"] ||
+    r.full_address ||
+    r.street_address ||
+    ""
+  ).trim() || null;
+
+    const city = (r.City || r.city || "").trim() || null;
+
+    const state = (r.State || r.state || "").trim() || null;
+
+    const zip = (r.Zip || r.zip || "").trim() || null;
+
+    const birth_date =
+      (r["Birth Date"] || r.birth_date || "").trim() || null;
+
+    const ssn_last4 =
+      (r["Last 4 SS#"] || r.ssn_last4 || "").trim() || null;
+
+    const has_health_insurance =
+      (
+        r["Have Any Health Ins. *. YES/NO"] ||
+        r.has_health_insurance ||
+        ""
+      ).trim() || null;
+
+    const insurance_source =
+      (
+        r["* Through Company, Through Spouse, Medicare, Tricare, ACA, Other "] ||
+        r.insurance_source ||
+        ""
+      ).trim() || null;
+
+    const gender = (r.Gender || r.gender || "").trim() || null;
+
+    const hire_date =
+      (r["Hire Date"] || r.hire_date || "").trim() || null;
+
     normalizedInputs.push({
       employer_id: employerId,
       email,
@@ -223,24 +324,65 @@ export async function POST(
       last_name,
       phone,
       eligible,
+
       annual_savings_cents:
         annual_savings_cents === undefined ||
         !Number.isFinite(annual_savings_cents as any)
           ? undefined
           : (annual_savings_cents as any),
+
+      monthly_savings_cents:
+        monthly_savings_cents === undefined ||
+        !Number.isFinite(monthly_savings_cents as any)
+          ? undefined
+          : (monthly_savings_cents as any),
+
+      source_status,
+      full_address,
+      city,
+      state,
+      zip,
+      birth_date,
+      ssn_last4,
+      has_health_insurance,
+      insurance_source,
+      gender,
+      hire_date,
+      source_row_json: r,
     });
   }
 
-  // Lookup existing employees
   const emails = normalizedInputs.map((r) => r.email);
   const existingMap = new Map<string, ExistingEmployee>();
 
   for (const part of chunk(emails, 500)) {
     const { data: existing, error: exErr } = await supabaseServer
       .from("employees")
-      .select(
-        "id, email, token, opted_out_at, first_name, last_name, phone, employee_ref, eligible, annual_savings_cents"
-      )
+      .select(`
+        id,
+        email,
+        token,
+        opted_out_at,
+        first_name,
+        last_name,
+        phone,
+        employee_ref,
+        eligible,
+        annual_savings_cents,
+        monthly_savings_cents,
+        source_status,
+        full_address,
+        city,
+        state,
+        zip,
+        birth_date,
+        ssn_last4,
+        has_health_insurance,
+        insurance_source,
+        gender,
+        hire_date,
+        source_row_json
+      `)
       .eq("employer_id", employerId)
       .in("email", part);
 
@@ -266,19 +408,90 @@ export async function POST(
     const preservedToken = existing?.token || (dryRun ? "" : token());
     const preservedOptedOutAt = existing?.opted_out_at ?? null;
 
-    // ✅ Preserve savings if not provided
-    const finalSavings =
+    const finalAnnualSavings =
       r.annual_savings_cents === undefined
         ? (existing?.annual_savings_cents ?? null)
         : (r.annual_savings_cents ?? null);
 
+    const finalMonthlySavings =
+      r.monthly_savings_cents === undefined
+        ? (existing?.monthly_savings_cents ?? null)
+        : (r.monthly_savings_cents ?? null);
+
+    const finalSourceStatus =
+      r.source_status === undefined || r.source_status === null || r.source_status === ""
+        ? (existing?.source_status ?? null)
+        : r.source_status;
+
+    const finalFullAddress =
+      r.full_address === undefined || r.full_address === null || r.full_address === ""
+        ? (existing?.full_address ?? null)
+        : r.full_address;
+
+    const finalCity =
+      r.city === undefined || r.city === null || r.city === ""
+        ? (existing?.city ?? null)
+        : r.city;
+
+    const finalState =
+      r.state === undefined || r.state === null || r.state === ""
+        ? (existing?.state ?? null)
+        : r.state;
+
+    const finalZip =
+      r.zip === undefined || r.zip === null || r.zip === ""
+        ? (existing?.zip ?? null)
+        : r.zip;
+
+    const finalBirthDate =
+      r.birth_date === undefined || r.birth_date === null || r.birth_date === ""
+        ? (existing?.birth_date ?? null)
+        : r.birth_date;
+
+    const finalSsnLast4 =
+      r.ssn_last4 === undefined || r.ssn_last4 === null || r.ssn_last4 === ""
+        ? (existing?.ssn_last4 ?? null)
+        : r.ssn_last4;
+
+    const finalHasHealthInsurance =
+      r.has_health_insurance === undefined ||
+      r.has_health_insurance === null ||
+      r.has_health_insurance === ""
+        ? (existing?.has_health_insurance ?? null)
+        : r.has_health_insurance;
+
+    const finalInsuranceSource =
+      r.insurance_source === undefined ||
+      r.insurance_source === null ||
+      r.insurance_source === ""
+        ? (existing?.insurance_source ?? null)
+        : r.insurance_source;
+
+    const finalGender =
+      r.gender === undefined || r.gender === null || r.gender === ""
+        ? (existing?.gender ?? null)
+        : r.gender;
+
+    const finalHireDate =
+      r.hire_date === undefined || r.hire_date === null || r.hire_date === ""
+        ? (existing?.hire_date ?? null)
+        : r.hire_date;
+
+    const finalSourceRowJson =
+      r.source_row_json && Object.keys(r.source_row_json).length > 0
+        ? r.source_row_json
+        : (existing?.source_row_json ?? null);
+
     if (!existing) {
       inserted++;
     } else {
-      // Only count savings as a "change" if the CSV provided it
-      const savingsChanged =
+      const annualSavingsChanged =
         r.annual_savings_cents !== undefined &&
-        (existing.annual_savings_cents ?? null) !== finalSavings;
+        (existing.annual_savings_cents ?? null) !== finalAnnualSavings;
+
+      const monthlySavingsChanged =
+        r.monthly_savings_cents !== undefined &&
+        (existing.monthly_savings_cents ?? null) !== finalMonthlySavings;
 
       const changed =
         (existing.first_name ?? null) !== r.first_name ||
@@ -286,7 +499,19 @@ export async function POST(
         (existing.phone ?? null) !== r.phone ||
         (existing.employee_ref ?? null) !== r.employee_ref ||
         (existing.eligible ?? true) !== r.eligible ||
-        savingsChanged;
+        annualSavingsChanged ||
+        monthlySavingsChanged ||
+        (existing.source_status ?? null) !== finalSourceStatus ||
+        (existing.full_address ?? null) !== finalFullAddress ||
+        (existing.city ?? null) !== finalCity ||
+        (existing.state ?? null) !== finalState ||
+        (existing.zip ?? null) !== finalZip ||
+        (existing.birth_date ?? null) !== finalBirthDate ||
+        (existing.ssn_last4 ?? null) !== finalSsnLast4 ||
+        (existing.has_health_insurance ?? null) !== finalHasHealthInsurance ||
+        (existing.insurance_source ?? null) !== finalInsuranceSource ||
+        (existing.gender ?? null) !== finalGender ||
+        (existing.hire_date ?? null) !== finalHireDate;
 
       if (changed) updated++;
       else unchanged++;
@@ -300,31 +525,61 @@ export async function POST(
       last_name: r.last_name,
       phone: r.phone,
       eligible: r.eligible,
-      annual_savings_cents: finalSavings,
+
+      annual_savings_cents: finalAnnualSavings,
+      monthly_savings_cents: finalMonthlySavings,
+      source_status: finalSourceStatus,
+      full_address: finalFullAddress,
+      city: finalCity,
+      state: finalState,
+      zip: finalZip,
+      birth_date: finalBirthDate,
+      ssn_last4: finalSsnLast4,
+      has_health_insurance: finalHasHealthInsurance,
+      insurance_source: finalInsuranceSource,
+      gender: finalGender,
+      hire_date: finalHireDate,
+      source_row_json: finalSourceRowJson,
+
       token: preservedToken,
       opted_out_at: preservedOptedOutAt,
     };
   });
 
-  // Dry run: counts only, no writes, no links
   if (dryRun) {
     return Response.json({
       ok: true,
       dryRun: true,
       employer: { id: employer.id, name: employer.name },
       counts: { inserted, updated, unchanged, skipped, skippedDuplicates },
+      detectedFields: {
+        masterTemplateFields: true,
+        includesMonthlySavings: normalizedInputs.some(
+          (r) => r.monthly_savings_cents !== undefined
+        ),
+        includesAnnualSavings: normalizedInputs.some(
+          (r) => r.annual_savings_cents !== undefined
+        ),
+        includesBirthDate: normalizedInputs.some((r) => !!r.birth_date),
+        includesSsnLast4: normalizedInputs.some((r) => !!r.ssn_last4),
+        includesInsuranceSource: normalizedInputs.some(
+          (r) => !!r.insurance_source
+        ),
+        includesHireDate: normalizedInputs.some((r) => !!r.hire_date),
+      },
       links: [],
     });
   }
 
-  // Real import (employees)
   let upsertErrors = 0;
   for (const part of chunk(upsertRows, 500)) {
     const { error: upErr } = await supabaseServer
       .from("employees")
       .upsert(part, { onConflict: "employer_id,email" });
 
-    if (upErr) upsertErrors++;
+    if (upErr) {
+      upsertErrors++;
+    }
   }
 
   if (upsertErrors > 0) {
@@ -333,13 +588,19 @@ export async function POST(
         ok: false,
         error: "One or more upsert batches failed. Check server logs.",
         employer: { id: employer.id, name: employer.name },
-        counts: { inserted, updated, unchanged, skipped, skippedDuplicates, upsertErrors },
+        counts: {
+          inserted,
+          updated,
+          unchanged,
+          skipped,
+          skippedDuplicates,
+          upsertErrors,
+        },
       },
       { status: 500 }
     );
   }
 
-  // ✅ Plan Year sync: DO NOT fail whole import if this errors
   let planYearSyncError: string | null = null;
 
   try {
@@ -354,7 +615,9 @@ export async function POST(
     const employeeIds = (affectedEmployees ?? []).map((e: any) => e.id);
 
     const effectiveDate = String((employer as any).effective_date || "").trim();
-    if (!effectiveDate) throw new Error("Employer missing effective_date (cannot create plan year).");
+    if (!effectiveDate) {
+      throw new Error("Employer missing effective_date (cannot create plan year).");
+    }
 
     await ensureEmployeePlanYearForEmployees({
       employerId,
