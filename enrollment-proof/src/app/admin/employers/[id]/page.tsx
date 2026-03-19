@@ -26,14 +26,77 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function SimpleDropdown({
+  label,
+  items,
+}: {
+  label: string;
+  items: { href: string; label: string }[];
+}) {
+  return (
+    <details style={{ position: "relative" }}>
+      <summary
+        style={{
+          ...buttonStyle,
+          listStyle: "none",
+          cursor: "pointer",
+          userSelect: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          fontWeight: 800,
+        }}
+      >
+        {label} <span style={{ fontSize: 11 }}>▼</span>
+      </summary>
+
+      <div
+        style={{
+          position: "absolute",
+          right: 0,
+          top: "calc(100% + 8px)",
+          minWidth: 220,
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          boxShadow: "0 10px 24px rgba(0,0,0,0.12)",
+          padding: 8,
+          zIndex: 20,
+        }}
+      >
+        {items.map((item) => (
+          <a
+            key={item.href}
+            href={item.href}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "block",
+              padding: "10px 12px",
+              borderRadius: 10,
+              textDecoration: "none",
+              color: "#111827",
+              fontWeight: 700,
+            }}
+          >
+            {item.label}
+          </a>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export default async function EmployerDashboard({ params }: PageProps) {
   const { id } = await params;
 
   const { data: employer, error: employerErr } = await supabaseServer
-  .from("employers")
-  .select("id, name, effective_date, opt_out_deadline, support_email, sender_email, smart_send_enabled, smart_send_started_at")
-  .eq("id", id)
-  .maybeSingle();
+    .from("employers")
+    .select(
+      "id, name, effective_date, opt_out_deadline, support_email, sender_email, smart_send_enabled, smart_send_started_at"
+    )
+    .eq("id", id)
+    .maybeSingle();
 
   if (employerErr || !employer) {
     return (
@@ -55,47 +118,46 @@ export default async function EmployerDashboard({ params }: PageProps) {
   }
 
   const { data: enrollmentTemplates, error: tplErr } = await supabaseServer
-  .from("email_templates")
-  .select("id, name, subject, body, body_text, body_html, category, is_active, created_at, updated_at")
-  .eq("category", "enrollment")
-  .eq("is_active", true)
-  .order("updated_at", { ascending: false });
+    .from("email_templates")
+    .select(
+      "id, name, subject, body, body_text, body_html, category, is_active, created_at, updated_at"
+    )
+    .eq("category", "enrollment")
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false });
 
   if (tplErr) {
     console.warn("Failed loading enrollment templates:", tplErr.message);
   }
 
- // Email connection (same rules as sending)
-const {
-  connectedEmail,
-  reason: connectedEmailReason,
-} = await getConnectedEmail({ mode: "admin", employerId: id });
+  const {
+    connectedEmail,
+    reason: connectedEmailReason,
+  } = await getConnectedEmail({ mode: "admin", employerId: id });
 
   const { data: employees } = await supabaseServer
-  .from("employees")
-  .select(
-    [
-      "id",
-      "first_name",
-      "last_name",
-      "email",
-      "token",
-      "eligible",
-      "opted_out_at",
-      "election",
-
-      // NEW LOG FIELDS
-      "notice_sent_at",
-      "notice_viewed_at",
-      "learn_more_viewed_at",
-      "terms_viewed_at",
-      "confirm_closed_at",
-      "insurance_selection",
-      "insurance_selected_at",
-    ].join(",")
-  )
-  .eq("employer_id", id)
-  .order("email", { ascending: true });
+    .from("employees")
+    .select(
+      [
+        "id",
+        "first_name",
+        "last_name",
+        "email",
+        "token",
+        "eligible",
+        "opted_out_at",
+        "election",
+        "notice_sent_at",
+        "notice_viewed_at",
+        "learn_more_viewed_at",
+        "terms_viewed_at",
+        "confirm_closed_at",
+        "insurance_selection",
+        "insurance_selected_at",
+      ].join(",")
+    )
+    .eq("employer_id", id)
+    .order("email", { ascending: true });
 
   const { data: events } = await supabaseServer
     .from("events")
@@ -113,20 +175,21 @@ const {
 
   const viewedCount = employees ? employees.filter((e: any) => viewedSet.has(e.id)).length : 0;
   const optedOutCount = employees ? employees.filter((e: any) => !!e.opted_out_at).length : 0;
-  const confirmedSet = new Set(
-  (events ?? [])
-    .filter(
-      (ev: any) =>
-        ev.event_type === "confirm_closed" ||
-        ev.event_type === "confirm_close" ||
-        ev.event_type === "confirmed_closed"
-    )
-    .map((ev: any) => ev.employee_id)
-);
 
-const confirmedCount = employees
-  ? employees.filter((e: any) => confirmedSet.has(e.id) && !e.opted_out_at).length
-  : 0;
+  const confirmedSet = new Set(
+    (events ?? [])
+      .filter(
+        (ev: any) =>
+          ev.event_type === "confirm_closed" ||
+          ev.event_type === "confirm_close" ||
+          ev.event_type === "confirmed_closed"
+      )
+      .map((ev: any) => ev.employee_id)
+  );
+
+  const confirmedCount = employees
+    ? employees.filter((e: any) => confirmedSet.has(e.id) && !e.opted_out_at).length
+    : 0;
 
   const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000";
 
@@ -191,26 +254,55 @@ const confirmedCount = employees
           ← Back to Admin
         </Link>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            justifyContent: "flex-end",
+          }}
+        >
           <a href={`/admin/employers/${id}/import`} style={buttonStyle}>
             Upload CSV
           </a>
-          <a href={`/api/admin/employers/${id}/export`} style={buttonStyle}>
-            Download CSV
-          </a>
+
+          <SimpleDropdown
+            label="Status Report"
+            items={[
+              { href: `/api/admin/employers/${id}/export?format=xlsx`, label: "Excel" },
+              { href: `/api/admin/employers/${id}/export?format=pdf`, label: "PDF" },
+              { href: `/api/admin/employers/${id}/export?format=csv`, label: "CSV" },
+            ]}
+          />
+
+          <SimpleDropdown
+            label="Master Data"
+            items={[
+              { href: `/api/admin/employers/${id}/export-master`, label: "All employees" },
+              { href: `/api/admin/employers/${id}/export-master?only=confirmed`, label: "Confirmed only" },
+              { href: `/api/admin/employers/${id}/export-master?only=opened`, label: "Opened only" },
+              { href: `/api/admin/employers/${id}/export-master?only=not-opted-out`, label: "Not opted out" },
+              { href: `/api/admin/employers/${id}/export-master?only=opted-out`, label: "Opted out" },
+              { href: `/api/admin/employers/${id}/export-master?only=new`, label: "New only" },
+            ]}
+          />
+
           <a href={`/admin/employers/${id}/compliance`} style={buttonStyle}>
             Compliance
           </a>
-                 <a href={`/admin/employers/${id}/settings`} style={buttonStyle}>
-  Settings
-</a>
-<a href="/admin/templates" style={buttonStyle}>
-  Templates
-</a>
+
+          <a href={`/admin/employers/${id}/settings`} style={buttonStyle}>
+            Settings
+          </a>
+
+          <a href="/admin/templates" style={buttonStyle}>
+            Templates
+          </a>
         </div>
       </div>
 
-      {/* Header: left title/meta + right email block (this fixes the “floating” feeling) */}
+      {/* Header */}
       <div
         style={{
           display: "grid",
@@ -220,7 +312,6 @@ const confirmedCount = employees
           marginBottom: 12,
         }}
       >
-        {/* Left */}
         <div>
           <h1 style={{ margin: 0, fontSize: 38, letterSpacing: -0.6, color: "#111827" }}>
             {employer.name}
@@ -228,7 +319,9 @@ const confirmedCount = employees
 
           <div style={{ ...subtleText, fontSize: 13, marginTop: 10, lineHeight: 1.6 }}>
             <span style={{ fontWeight: 800, color: "#111827" }}>Employer ID:</span>{" "}
-            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: "#111827" }}>{id}</span>
+            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", color: "#111827" }}>
+              {id}
+            </span>
             {"  "}·{"  "}
             <span style={{ fontWeight: 800, color: "#111827" }}>Effective:</span> {fmtDate(employer.effective_date)}
             {"  "}·{"  "}
@@ -238,15 +331,10 @@ const confirmedCount = employees
           </div>
         </div>
 
-        {/* Right (right-aligned, compact, no centering drift) */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
           {emailPill}
 
-          <ConnectEmailMenu
-  employerId={id}
-  returnTo={`/admin/employers/${id}`}
-  variant="dark"
-/>
+          <ConnectEmailMenu employerId={id} returnTo={`/admin/employers/${id}`} variant="dark" />
 
           <div style={{ ...subtleText, fontSize: 10, maxWidth: 340, textAlign: "right" }}>
             Used for <strong style={{ color: "#111827" }}>Enrollment</strong> +{" "}
@@ -257,28 +345,28 @@ const confirmedCount = employees
 
       {/* KPI row */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "12px 0 18px 0" }}>
-  <StatCard label="Employees" value={employeeCount} />
-  <StatCard label="Viewed" value={viewedCount} />
-  <StatCard label="Confirmed" value={confirmedCount} />
-  <StatCard label="Opted out" value={optedOutCount} />
-</div>
+        <StatCard label="Employees" value={employeeCount} />
+        <StatCard label="Viewed" value={viewedCount} />
+        <StatCard label="Confirmed" value={confirmedCount} />
+        <StatCard label="Opted out" value={optedOutCount} />
+      </div>
 
-              {/* Table */}
+      {/* Table */}
       <div style={{ ...cardStyle, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <EmployeeTableClient
-  employerId={id}
-  employees={(employees ?? []) as any}
-  events={(events ?? []) as any}
-  baseUrl={baseUrl}
-  employerName={String(employer.name || "")}
-  supportEmail={String(employer.support_email || "support@company.com")}
-  effectiveDate={String(employer.effective_date || "")}
-  optOutDeadline={String(employer.opt_out_deadline || "")}
-  templates={(enrollmentTemplates ?? []) as any}
-  smartSendEnabled={Boolean((employer as any).smart_send_enabled)}
-  smartSendStartedAt={String((employer as any).smart_send_started_at || "")}
-/>
+            employerId={id}
+            employees={(employees ?? []) as any}
+            events={(events ?? []) as any}
+            baseUrl={baseUrl}
+            employerName={String(employer.name || "")}
+            supportEmail={String(employer.support_email || "support@company.com")}
+            effectiveDate={String(employer.effective_date || "")}
+            optOutDeadline={String(employer.opt_out_deadline || "")}
+            templates={(enrollmentTemplates ?? []) as any}
+            smartSendEnabled={Boolean((employer as any).smart_send_enabled)}
+            smartSendStartedAt={String((employer as any).smart_send_started_at || "")}
+          />
         </div>
       </div>
     </main>

@@ -67,6 +67,39 @@ function formatExportTimestamp() {
   });
 }
 
+function latestEventAt(activity: any[], type: string): string | null {
+  const hit = (activity ?? []).find((x) => x.event_type === type);
+  return hit?.created_at ?? null;
+}
+
+function hasViewedNotice(
+  e: {
+    notice_viewed_at?: string | null;
+    learn_more_viewed_at?: string | null;
+    terms_viewed_at?: string | null;
+    confirm_closed_at?: string | null;
+    insurance_selected_at?: string | null;
+    opted_out_at?: string | null;
+  },
+  activity: any[]
+) {
+  return !!(
+    e.notice_viewed_at ||
+    e.learn_more_viewed_at ||
+    e.terms_viewed_at ||
+    e.confirm_closed_at ||
+    e.insurance_selected_at ||
+    e.opted_out_at ||
+    latestEventAt(activity, "page_view") ||
+    latestEventAt(activity, "learn_more_view") ||
+    latestEventAt(activity, "confirm_closed") ||
+    latestEventAt(activity, "confirm_close") ||
+    latestEventAt(activity, "acknowledged_closed") ||
+    latestEventAt(activity, "opt_out") ||
+    latestEventAt(activity, "opt_in")
+  );
+}
+
 function getStatusRank(status: EmployeeStatus) {
   const rank: Record<EmployeeStatus, number> = {
     Active: 0,
@@ -190,19 +223,25 @@ export async function GET(
   }
 
   const { data: employeesRaw, error: empErr } = await supabaseServer
-    .from("employees")
-    .select(`
-      employee_ref,
-      first_name,
-      last_name,
-      email,
-      phone,
-      token,
-      eligible,
-      opted_out_at,
-      events ( event_type )
-    `)
-    .eq("employer_id", id);
+  .from("employees")
+  .select(`
+    employee_ref,
+    first_name,
+    last_name,
+    email,
+    phone,
+    token,
+    eligible,
+    opted_out_at,
+    notice_sent_at,
+    notice_viewed_at,
+    learn_more_viewed_at,
+    terms_viewed_at,
+    confirm_closed_at,
+    insurance_selected_at,
+    events ( event_type, created_at )
+  `)
+  .eq("employer_id", id);
 
   if (empErr) {
     return new Response(`Error loading employees: ${empErr.message}`, {
@@ -211,32 +250,42 @@ export async function GET(
   }
 
   let employees: EmployeeRow[] = (employeesRaw ?? []).map((e: any) => {
-    const viewed = Array.isArray(e.events)
-      ? e.events.some((ev: any) => ev.event_type === "page_view")
-      : false;
+  const activity = Array.isArray(e.events) ? e.events : [];
 
-    const noticeLink = e.token ? `${baseUrl}/notice/${e.token}` : "";
-
-    const status: EmployeeStatus = e.opted_out_at
-      ? "Opted out"
-      : viewed
-      ? "Active"
-      : "Pending";
-
-    return {
-      employee_ref: e.employee_ref ?? "",
-      first_name: e.first_name ?? "",
-      last_name: e.last_name ?? "",
-      email: e.email ?? "",
-      phone: e.phone ?? "",
-      token: e.token ?? "",
-      eligible: !!e.eligible,
+  const viewed = hasViewedNotice(
+    {
+      notice_viewed_at: e.notice_viewed_at ?? null,
+      learn_more_viewed_at: e.learn_more_viewed_at ?? null,
+      terms_viewed_at: e.terms_viewed_at ?? null,
+      confirm_closed_at: e.confirm_closed_at ?? null,
+      insurance_selected_at: e.insurance_selected_at ?? null,
       opted_out_at: e.opted_out_at ?? null,
-      viewed,
-      noticeLink,
-      status,
-    };
-  });
+    },
+    activity
+  );
+
+  const noticeLink = e.token ? `${baseUrl}/notice/${e.token}` : "";
+
+  const status: EmployeeStatus = e.opted_out_at
+    ? "Opted out"
+    : viewed
+    ? "Active"
+    : "Pending";
+
+  return {
+    employee_ref: e.employee_ref ?? "",
+    first_name: e.first_name ?? "",
+    last_name: e.last_name ?? "",
+    email: e.email ?? "",
+    phone: e.phone ?? "",
+    token: e.token ?? "",
+    eligible: !!e.eligible,
+    opted_out_at: e.opted_out_at ?? null,
+    viewed,
+    noticeLink,
+    status,
+  };
+});
 
   if (statusFilter) {
     employees = employees.filter((e) => e.status === statusFilter);
