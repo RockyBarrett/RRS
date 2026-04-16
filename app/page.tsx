@@ -581,7 +581,7 @@ export default function Home() {
 
     const a1 = `Company: ${company}\nEmployees: ${employees}\nMessage: ${message}`;
 
-    const calendlyUrl = `https://calendly.com/lee-kw0k/payroll-strategy-meeting?full_name=${name}&email=${email}&a1=${encodeURIComponent(a1).replace(/%20/g, ' ')}`;
+    const calendlyUrl = `https://calendly.com/revenuereturnspecialists/payroll-strategy-meeting?full_name=${name}&email=${email}&a1=${encodeURIComponent(a1).replace(/%20/g, ' ')}`;
 
     window.open(calendlyUrl);
   }}
@@ -674,7 +674,7 @@ export default function Home() {
           </div>
 
 <div className={styles.footer}>
-  © 2025 Revenue Return Specialists. All rights reserved.
+  © 2026 Revenue Return Specialists. All rights reserved.
 </div>
         </div>
       </div>

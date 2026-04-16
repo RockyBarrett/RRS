@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabaseServer";
+import { ensureActivePlanYear } from "@/lib/planYear";
 
 export const runtime = "nodejs";
 
@@ -40,7 +41,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "Opt-out deadline must be YYYY-MM-DD." }, { status: 400 });
   }
 
-  // Basic sanity: opt-out deadline should be on/before effective date (usually before)
+  // Opt-out deadline must be on or before effective date
   const eff = new Date(`${effective_date}T00:00:00Z`).getTime();
   const dead = new Date(`${opt_out_deadline}T00:00:00Z`).getTime();
   if (Number.isNaN(eff) || Number.isNaN(dead)) {
@@ -53,6 +54,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  // 1️⃣ Create employer
   const { data, error } = await supabaseServer
     .from("employers")
     .insert({
@@ -67,6 +69,13 @@ export async function POST(req: Request): Promise<Response> {
   if (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
+
+  // 2️⃣ Auto-create ACTIVE plan year (deterministic)
+  await ensureActivePlanYear({
+    employerId: data.id,
+    effectiveDate: effective_date,
+    lengthMonths: 12, // default; we can expose this later
+  });
 
   return Response.json({ ok: true, id: data.id });
 }
