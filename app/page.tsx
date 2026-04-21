@@ -194,7 +194,7 @@ export default function Home() {
       </div>
       <div className={styles.benefitContent}>
         <h3>Inovative & Acknowledged</h3>
-        <p>Featured in INC. Magazine for trailblazing inovation & structurally confirmed by the CPA journal & Cornell Law School research</p>
+        <p>Featured in INC. Magazine for trailblazing innovation & structurally confirmed by the CPA journal & Cornell Law School research</p>
         <div className={styles.benefitTag}>Rapidly Growing Across the US</div>
       </div>
     </div>
@@ -446,7 +446,7 @@ export default function Home() {
     </div>
     <div className={styles.howBody}>
       <div className={styles.howTextBox}>
-        <p>Everything works in sync with all of your existing programs and providors.</p>
+        <p>Everything works in sync with all of your existing programs and providers.</p>
         <div className={styles.howTag}>Seamless integration</div>
       </div>
       <div className={styles.howImageBox}>
