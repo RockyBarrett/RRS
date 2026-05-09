@@ -10,6 +10,7 @@ import {
   Building2,
   Calculator,
   HeartHandshake,
+  MessageCircle,
 } from 'lucide-react';
 import styles from './partners.module.css';
 
@@ -22,21 +23,19 @@ export default function PartnersPage() {
         </Link>
 
         <nav className={styles.navLinks}>
-  <Link href="/">Home</Link>
-  <Link href="/employers">Employers</Link>
-  <Link href="/partners">CPA & Referral Partners</Link>
-  <a href="#process">How It Works</a>
-  <Link href="/employers#contact">Contact</Link>
-</nav>
+          <Link href="/">Home</Link>
+          <Link href="/employers">Employers</Link>
+          <Link href="/partners">CPA & Referral Partners</Link>
+          <a href="#process">How It Works</a>
+          <Link href="/questions">Submit a Question</Link>
+        </nav>
       </header>
 
       <section className={styles.hero}>
         <div className={styles.heroText}>
           <div className={styles.pill}>CPA, Payroll & Referral Partner Program</div>
 
-          <h1>
-            Help Your Clients Unlock Payroll Savings Without Adding More Work to Your Plate
-          </h1>
+          <h1>Help Your Clients Unlock Payroll Savings Without Adding More Work to Your Plate</h1>
 
           <p>
             Revenue Return Specialists partners with CPAs, payroll professionals, benefits brokers,
@@ -47,13 +46,14 @@ export default function PartnersPage() {
 
           <div className={styles.heroButtons}>
             <a href="#partner-contact" className={styles.primaryButton}>
-              Become a Referral Partner
+              Schedule a Partner Call
               <ArrowRight size={18} />
             </a>
 
-            <a href="#process" className={styles.secondaryButton}>
-              See How It Works
-            </a>
+            <Link href="/questions" className={styles.secondaryButton}>
+              <MessageCircle size={18} />
+              Submit a Question
+            </Link>
           </div>
 
           <div className={styles.trustLine}>
@@ -138,6 +138,28 @@ export default function PartnersPage() {
               implementation process.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className={styles.partnerFitCta}>
+        <div>
+          <div className={styles.pill}>Have a Specific Client in Mind?</div>
+          <h2>Let’s See If They Might Be a Fit</h2>
+          <p>
+            Send us a quick question about a client, industry, employee count, or payroll situation,
+            and we’ll help you think through whether the opportunity is worth exploring.
+          </p>
+        </div>
+
+        <div className={styles.partnerFitButtons}>
+          <Link href="/questions" className={styles.primaryButton}>
+            Submit a Question
+            <MessageCircle size={18} />
+          </Link>
+
+          <a href="#process" className={styles.secondaryButton}>
+            See the Process
+          </a>
         </div>
       </section>
 
@@ -278,15 +300,21 @@ export default function PartnersPage() {
           </p>
         </div>
 
-        <a
-          className={styles.primaryButton}
-          href="https://calendly.com/revenuereturnspecialists/payroll-strategy-meeting"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Schedule a Partner Call
-          <ArrowRight size={18} />
-        </a>
+        <div className={styles.finalCtaButtons}>
+          <a
+            className={styles.primaryButton}
+            href="https://calendly.com/revenuereturnspecialists/payroll-strategy-meeting"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Schedule a Partner Call
+            <ArrowRight size={18} />
+          </a>
+
+          <Link href="/questions" className={styles.darkQuestionButton}>
+            Submit a Question
+          </Link>
+        </div>
       </section>
     </main>
   );

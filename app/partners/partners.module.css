@@ -23,7 +23,7 @@
 
 .navLinks {
   display: flex;
-  gap: 26px;
+  gap: 22px;
   align-items: center;
 }
 
@@ -31,7 +31,8 @@
   color: #334155;
   text-decoration: none;
   font-size: 0.95rem;
-  font-weight: 650;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
 .navLinks a:hover {
@@ -72,7 +73,7 @@
   background: rgba(34, 197, 94, 0.1);
   color: #15803d;
   border: 1px solid rgba(34, 197, 94, 0.18);
-  font-weight: 800;
+  font-weight: 850;
   font-size: 0.85rem;
 }
 
@@ -92,7 +93,7 @@
   min-height: 50px;
   padding: 0 22px;
   border-radius: 999px;
-  font-weight: 800;
+  font-weight: 850;
   text-decoration: none;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -197,7 +198,9 @@
 
 .sectionIntro h2,
 .supportText h2,
-.ctaSection h2 {
+.ctaSection h2,
+.partnerFitCta h2,
+.processCta h2 {
   font-size: clamp(2rem, 4vw, 3.25rem);
   line-height: 1;
   letter-spacing: -0.05em;
@@ -206,7 +209,9 @@
 
 .sectionIntro p,
 .supportText p,
-.ctaSection p {
+.ctaSection p,
+.partnerFitCta p,
+.processCta p {
   color: #64748b;
   font-size: 1.08rem;
   line-height: 1.75;
@@ -276,6 +281,32 @@
   color: #d97706;
 }
 
+.partnerFitCta {
+  max-width: 1180px;
+  margin: 0 auto 20px;
+  padding: 38px;
+  border-radius: 34px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 65px rgba(15, 23, 42, 0.08);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+
+.partnerFitCta p {
+  max-width: 760px;
+  margin: 0;
+}
+
+.partnerFitButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 230px;
+}
+
 .winSection {
   background: linear-gradient(135deg, #ecfdf5, #eff6ff);
   border-radius: 42px;
@@ -310,16 +341,11 @@
 }
 
 .step {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 26px;
-  padding: 26px;
   display: grid;
   grid-template-columns: 80px 1fr;
   column-gap: 22px;
   row-gap: 6px;
   align-items: start;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
 }
 
 .step span {
@@ -349,6 +375,59 @@
   max-width: 820px;
 }
 
+.processCta {
+  max-width: 1180px;
+  margin: 0 auto 20px;
+  padding: 38px;
+  border-radius: 34px;
+  background: linear-gradient(135deg, #0f172a, #111827);
+  color: white;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+
+.processCta h2 {
+  color: white;
+  margin: 0 0 12px;
+}
+
+.processCta p {
+  color: #cbd5e1;
+  max-width: 760px;
+  margin: 0;
+}
+
+.processCtaButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 235px;
+}
+
+.darkQuestionButton {
+  min-height: 50px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: 1px solid rgba(203, 213, 225, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-decoration: none;
+  font-weight: 850;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.darkQuestionButton:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .ctaSection {
   max-width: 1180px;
   margin: 20px auto 80px;
@@ -374,6 +453,13 @@
   color: #86efac;
 }
 
+.finalCtaButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 235px;
+}
+
 @media (max-width: 950px) {
   .header {
     flex-direction: column;
@@ -388,7 +474,9 @@
 
   .hero,
   .supportSection,
-  .ctaSection {
+  .ctaSection,
+  .partnerFitCta,
+  .processCta {
     grid-template-columns: 1fr;
   }
 
@@ -401,9 +489,47 @@
   .supportText {
     position: static;
   }
+
+  .partnerFitButtons,
+  .processCtaButtons,
+  .finalCtaButtons {
+    min-width: 0;
+  }
 }
 
-@media (max-width: 950px) {
+@media (max-width: 680px) {
+  .hero {
+    padding-top: 46px;
+    padding-bottom: 58px;
+  }
+
+  .heroText h1 {
+    font-size: 2.7rem;
+  }
+
+  .heroButtons,
+  .partnerFitButtons,
+  .processCtaButtons,
+  .finalCtaButtons {
+    width: 100%;
+  }
+
+  .primaryButton,
+  .secondaryButton,
+  .darkQuestionButton {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .heroCard,
+  .partnerFitCta,
+  .processCta,
+  .ctaSection {
+    padding: 26px;
+    border-radius: 26px;
+  }
+
   .step {
     grid-template-columns: 1fr;
     gap: 14px;

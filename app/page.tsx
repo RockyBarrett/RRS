@@ -8,6 +8,7 @@ import {
   DollarSign,
   Users,
   CheckCircle,
+  MessageCircle,
 } from 'lucide-react';
 
 export default function Home() {
@@ -22,6 +23,7 @@ export default function Home() {
           <Link href="/">Home</Link>
           <Link href="/employers">Employers</Link>
           <Link href="/partners">Partners</Link>
+          <Link href="/questions">Submit a Question</Link>
           <Link href="/employers#contact">Contact</Link>
         </nav>
       </header>
@@ -38,36 +40,12 @@ export default function Home() {
             costs, and create meaningful value for CPAs, payroll companies, brokers, and referral
             partners.
           </p>
-
-          <div className={styles.heroStats}>
-            <div>
-              <DollarSign size={22} />
-              <span>$150–$200</span>
-              <p>potential monthly employee increase</p>
-            </div>
-
-            <div>
-              <Building2 size={22} />
-              <span>Up to $600</span>
-              <p>annual employer savings per employee</p>
-            </div>
-
-            <div>
-              <ShieldCheck size={22} />
-              <span>Managed</span>
-              <p>implementation and ongoing support</p>
-            </div>
-          </div>
         </div>
       </section>
 
       <section className={styles.pathSection}>
-        <div className={styles.sectionIntro}>
+        <div className={styles.sectionIntroCompact}>
           <h2>Choose Your Path</h2>
-          <p>
-            Whether you are an employer evaluating savings or a trusted advisor looking to bring new
-            value to clients, we’ll guide you to the right place.
-          </p>
         </div>
 
         <div className={styles.pathGrid}>
@@ -137,6 +115,40 @@ export default function Home() {
             </div>
           </Link>
         </div>
+
+        <div className={styles.questionCta}>
+          <div>
+            <h3>Not sure where to start?</h3>
+            <p>Submit a question and our team will point you in the right direction.</p>
+          </div>
+
+          <Link href="/questions" className={styles.questionButton}>
+            <MessageCircle size={18} />
+            Submit a Question
+          </Link>
+        </div>
+      </section>
+
+      <section className={styles.statsSection}>
+        <div className={styles.heroStats}>
+          <div>
+            <DollarSign size={22} />
+            <span>$150–$200</span>
+            <p>potential monthly employee increase</p>
+          </div>
+
+          <div>
+            <Building2 size={22} />
+            <span>Up to $600</span>
+            <p>annual employer savings per employee</p>
+          </div>
+
+          <div>
+            <ShieldCheck size={22} />
+            <span>Managed</span>
+            <p>implementation and ongoing support</p>
+          </div>
+        </div>
       </section>
 
       <section className={styles.trustSection}>
@@ -148,6 +160,17 @@ export default function Home() {
             experience, and give trusted advisors a meaningful reason to start a new conversation
             with clients.
           </p>
+
+          <div className={styles.trustButtons}>
+            <Link href="/employers#contact" className={styles.trustPrimaryButton}>
+              Schedule a Call
+              <ArrowRight size={18} />
+            </Link>
+
+            <Link href="/questions" className={styles.trustSecondaryButton}>
+              Submit a Question
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -1,7 +1,6 @@
 'use client';
 
 import styles from './employers.module.css';
-import '../globals.css';
 import { useState } from 'react';
 import Link from 'next/link';
 import {
@@ -11,6 +10,7 @@ import {
   CheckCircle,
   DollarSign,
   Heart,
+  MessageCircle,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -35,22 +35,22 @@ export default function Home() {
         </Link>
 
         <nav className={styles.navLinks}>
-  <Link href="/">Home</Link>
-  <Link href="/employers">Employers</Link>
-  <Link href="/partners">CPA & Referral Partners</Link>
-  <a href="#how">How It Works</a>
-  <a href="#contact">Contact</a>
-</nav>
+          <Link href="/">Home</Link>
+          <Link href="/employers">Employers</Link>
+          <Link href="/partners">CPA & Referral Partners</Link>
+          <a href="#how">How It Works</a>
+          <a href="#contact">Contact</a>
+        </nav>
       </header>
 
       {/* Hero */}
       <section className={styles.hero}>
         <div className={styles.heroTextBlock}>
-          <div className={`${styles.pill} ${styles.greenPill}`}>Payroll-Based Savings Strategy</div>
+          <div className={`${styles.pill} ${styles.greenPill}`}>
+            Payroll-Based Savings Strategy
+          </div>
 
-          <h1>
-            Help Employees Take Home More While Reducing Employer Payroll Tax Costs
-          </h1>
+          <h1>Help Employees Take Home More While Reducing Employer Payroll Tax Costs</h1>
 
           <p>
             Revenue Return Specialists helps employers evaluate and implement a payroll-based
@@ -239,6 +239,30 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Mid Page CTA */}
+      <section className={styles.inlineCta}>
+        <div>
+          <div className={`${styles.pill} ${styles.greenPill}`}>Have Questions?</div>
+          <h2>Want to Know If This Could Work for Your Company?</h2>
+          <p>
+            Our team can help you understand the strategy, review fit, and answer practical
+            questions before you decide whether to move forward.
+          </p>
+        </div>
+
+        <div className={styles.inlineCtaButtons}>
+          <a href="#contact" className={styles.primaryButton}>
+            Schedule a Savings Review
+            <ArrowRight size={18} />
+          </a>
+
+          <Link href="/questions" className={styles.secondaryButton}>
+            <MessageCircle size={18} />
+            Submit a Question
+          </Link>
+        </div>
+      </section>
+
       {/* Three-Way Win */}
       <section className={styles.winSection}>
         <div className={styles.sectionIntro}>
@@ -382,6 +406,28 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Calculator CTA */}
+      <section className={styles.calculatorCta}>
+        <div>
+          <h2>Want to Review These Numbers With Us?</h2>
+          <p>
+            The calculator gives a simple estimate. A quick review can help clarify eligibility,
+            implementation steps, and what this could realistically mean for your organization.
+          </p>
+        </div>
+
+        <div className={styles.calculatorCtaButtons}>
+          <a href="#contact" className={styles.primaryButton}>
+            Review These Numbers
+            <ArrowRight size={18} />
+          </a>
+
+          <Link href="/questions" className={styles.secondaryButtonDarkText}>
+            Submit a Question
+          </Link>
+        </div>
+      </section>
+
       {/* How It Works */}
       <section className={styles.howSection} id="how">
         <div className={styles.sectionIntro}>
@@ -460,9 +506,7 @@ export default function Home() {
           <div className={styles.whyCard}>
             <Heart size={30} />
             <h3>No Disruption to Current Benefits</h3>
-            <p>
-              The strategy is designed to work alongside existing programs and providers.
-            </p>
+            <p>The strategy is designed to work alongside existing programs and providers.</p>
           </div>
 
           <div className={styles.whyCard}>
@@ -527,6 +571,13 @@ export default function Home() {
             Schedule a personal consultation with one of our experts. No pressure, no pitch — just a
             practical conversation about whether this strategy could create value for your team.
           </p>
+
+          <div className={styles.contactHeaderButtons}>
+            <Link href="/questions" className={styles.contactQuestionButton}>
+              <MessageCircle size={18} />
+              Submit a Question Instead
+            </Link>
+          </div>
         </div>
 
         <div className={styles.contactGrid}>

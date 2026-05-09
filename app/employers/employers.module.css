@@ -1263,3 +1263,180 @@
 .trustLine {
   max-width: 720px;
 }
+
+@media (max-width: 680px) {
+  .secondaryButtonDark {
+    width: calc(100% - 8px);
+    margin: 0 auto;
+    max-width: 100%;
+    box-sizing: border-box;
+    justify-content: center;
+    min-height: 54px;
+    padding: 0 14px;
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
+}
+
+/* ==== Employer Page CTA Additions ==== */
+
+.inlineCta {
+  max-width: 1180px;
+  margin: 10px auto 30px;
+  padding: 38px;
+  border-radius: 34px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 24px 65px rgba(15, 23, 42, 0.08);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+
+.inlineCta h2 {
+  font-size: clamp(1.8rem, 3vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  margin: 14px 0;
+  color: #0f172a;
+}
+
+.inlineCta p {
+  color: #64748b;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  max-width: 720px;
+  margin: 0;
+}
+
+.inlineCtaButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 245px;
+}
+
+.calculatorCta {
+  max-width: 1180px;
+  margin: 0 auto 20px;
+  padding: 38px;
+  border-radius: 34px;
+  background: linear-gradient(135deg, #0f172a, #111827);
+  color: white;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+
+.calculatorCta h2 {
+  font-size: clamp(1.8rem, 3vw, 2.75rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+  margin: 0 0 12px;
+  color: white;
+}
+
+.calculatorCta p {
+  color: #cbd5e1;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  max-width: 760px;
+  margin: 0;
+}
+
+.calculatorCtaButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 235px;
+}
+
+.secondaryButtonDarkText {
+  min-height: 50px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: 1px solid rgba(203, 213, 225, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-decoration: none;
+  font-weight: 850;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.secondaryButtonDarkText:hover {
+  transform: translateY(-2px);
+}
+
+.contactHeaderButtons {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}
+
+.contactQuestionButton {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  border: 1px solid rgba(203, 213, 225, 0.28);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  text-decoration: none;
+  font-weight: 850;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.contactQuestionButton:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.contactQuestionButton svg {
+  color: #22c55e;
+}
+
+@media (max-width: 900px) {
+  .inlineCta,
+  .calculatorCta {
+    grid-template-columns: 1fr;
+    margin-left: 22px;
+    margin-right: 22px;
+  }
+
+  .inlineCtaButtons,
+  .calculatorCtaButtons {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 680px) {
+  .inlineCta,
+  .calculatorCta {
+    padding: 26px;
+    border-radius: 26px;
+  }
+
+  .inlineCtaButtons .primaryButton,
+  .inlineCtaButtons .secondaryButton,
+  .calculatorCtaButtons .primaryButton,
+  .secondaryButtonDarkText,
+  .contactQuestionButton {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .contactHeaderButtons {
+    width: 100%;
+  }
+}
