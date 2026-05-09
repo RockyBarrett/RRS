@@ -45,7 +45,7 @@ export default function Home() {
 
       <section className={styles.pathSection}>
         <div className={styles.sectionIntroCompact}>
-          <h2>Choose Your Path</h2>
+          <h2>How We Serve You</h2>
         </div>
 
         <div className={styles.pathGrid}>
